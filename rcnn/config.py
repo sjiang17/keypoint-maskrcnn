@@ -195,25 +195,25 @@ dataset.Cityscape.rcnn_epoch = 24
 dataset.Cityscape.rcnn_lr_step = '20'
 
 dataset.coco = edict()
-dataset.coco.image_set = 'train2014'
-dataset.coco.test_image_set = 'val2014'
+dataset.coco.image_set = 'train2017'
+dataset.coco.test_image_set = 'val2017'
 dataset.coco.root_path = 'data'
 dataset.coco.dataset_path = 'data/coco'
-dataset.coco.NUM_CLASSES = 8
+dataset.coco.NUM_CLASSES = 2
 dataset.coco.SCALES = [(800, 1333)]
 dataset.coco.ANCHOR_SCALES = (8,)
 dataset.coco.ANCHOR_RATIOS = (0.5, 1, 2)
 dataset.coco.NUM_ANCHORS = len(dataset.Cityscape.ANCHOR_SCALES) * len(dataset.Cityscape.ANCHOR_RATIOS)
-dataset.coco.CLASS_ID = [0, 1, 2, 3, 4, 5, 6, 7]
-dataset.coco.CLASS_NAME = ('__background__', 'bigcar', 'bus', 'car', 'crane', 'cyc', 'motorcycle', 'ped')
+dataset.coco.CLASS_ID = [0, 1]
+dataset.coco.CLASS_NAME = ('__background__', 'person')
 dataset.coco.SEG_CODE = 500
 dataset.coco.BATCH_ROIS = 512
 dataset.coco.ASPECT_GROUPING = True
 dataset.coco.SCALE = False
-dataset.coco.rpn_epoch = 12
-dataset.coco.rpn_lr_step = '8,10'
-dataset.coco.rcnn_epoch = 24
-dataset.coco.rcnn_lr_step = '12,16'
+dataset.coco.rpn_epoch = 6
+dataset.coco.rpn_lr_step = '3,5'
+dataset.coco.rcnn_epoch = 12
+dataset.coco.rcnn_lr_step = '6,8'
 
 
 def generate_config(_network, _dataset):

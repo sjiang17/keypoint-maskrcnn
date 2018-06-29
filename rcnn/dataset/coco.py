@@ -39,7 +39,9 @@ class coco(IMDB):
         # and coco index which comes with the annotation file
         cats = [cat['name'] for cat in self.coco.loadCats(self.coco.getCatIds())]
         self.classes = ['__background__'] + cats
+        print('categories:', self.classes)
         self.num_classes = len(self.classes)
+        print('num of categories:', self.num_classes)
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self._class_to_coco_ind = dict(zip(cats, self.coco.getCatIds()))
         self._coco_ind_to_class_ind = dict([(self._class_to_coco_ind[cls], self._class_to_ind[cls])
@@ -57,7 +59,7 @@ class coco(IMDB):
     def _get_ann_file(self):
         """ self.data_path / annotations / instances_train2014.json """
         prefix = 'instances' if 'test' not in self.image_set else 'image_info'
-        return os.path.join(self.data_path, 'annotations', prefix + '_' + self.image_set + '.json')
+        return os.path.join(self.data_path, 'annotations', 'person', prefix + '_' + self.image_set + '.json')
 
     def _load_image_set_index(self):
         """ image id: int """

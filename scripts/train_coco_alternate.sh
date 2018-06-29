@@ -8,14 +8,14 @@ export PYTHONUNBUFFERED=1
 
 TRAIN_DIR=model/res50-fpn/coco/alternate_detection/
 DATASET=coco
-SET=train2014+valminusminival2014
+SET=train2017
 #TEST_SET=minival2014
 mkdir -p ${TRAIN_DIR}
 
 # Train
 echo "current workspace: $(pwd)"
 
-GPU=0,1,2,3,4,5,6,7
+GPU=0
 #GPU=0
 
 # Train
