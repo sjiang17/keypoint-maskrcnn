@@ -228,12 +228,16 @@ class coco(IMDB):
         assert self.num_images == len(roidb)
         for i in range(self.num_images):
             roirec = roidb[i]
+            bug_box_ind = roirec['boxes'][:, 2] < roirec['boxes'][:, 0]
+            roirec['boxes'][bug_box_ind, 2] = roirec['boxes'][bug_box_ind, 0]
             boxes = roirec['boxes'].copy()
             if boxes.shape[0] != 0:
                 oldx1 = boxes[:, 0].copy()
                 oldx2 = boxes[:, 2].copy()
                 boxes[:, 0] = roirec['width'] - oldx2 - 1
                 boxes[:, 2] = roirec['width'] - oldx1 - 1
+                bug_ind = boxes[:, 2] < boxes[:, 0]
+                boxes[bug_ind, 2] = boxes[bug_ind, 0]
                 assert (boxes[:, 2] >= boxes[:, 0]).all(),\
                     'img_name %s, width %d\n' % (roirec['image'], roirec['width']) + \
                     np.array_str(roirec['boxes'], precision=3, suppress_small=True)

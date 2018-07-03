@@ -53,7 +53,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     # setup multi-gpu
     batch_size = len(ctx)
     input_batch_size = config.TRAIN.BATCH_IMAGES * batch_size
-
+    print(input_batch_size)
     # print config
     pprint.pprint(config)
 
@@ -107,7 +107,6 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('mask_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES, 28, 28)))
-
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
     print('input shape')

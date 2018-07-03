@@ -551,7 +551,7 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
 
     mask_deconv_2 = mask_deconv_2.reshape((1, -1))
     mask_target = mask_target.reshape((1, -1))
-    mask_loss = mx.sym.contrib.SigmoidCrossEntropy(data=mask_deconv_2, label=mask_target,
+    mask_loss = mx.sym.MultiLogistic(data=mask_deconv_2, label=mask_target,
                                                    grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
 
     mask_group = [mask_loss]

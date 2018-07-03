@@ -15,19 +15,19 @@ mkdir -p ${TRAIN_DIR}
 # Train
 echo "current workspace: $(pwd)"
 
-GPU=0
+GPU=0,1,2,3
 #GPU=0
 
 # Train
-python train_alternate_mask_fpn_stage1.py \
-    --network resnet_fpn \
-    --dataset ${DATASET} \
-    --image_set ${SET} \
-    --root_path ${TRAIN_DIR} \
-    --pretrained model/resnet-50 \
-    --prefix ${TRAIN_DIR} \
-    --pretrained_epoch 0 \
-    --gpu $GPU && \
+#python train_alternate_mask_fpn_stage1.py \
+#    --network resnet_fpn \
+#    --dataset ${DATASET} \
+#    --image_set ${SET} \
+#    --root_path ${TRAIN_DIR} \
+#    --pretrained model/resnet-50 \
+#    --prefix ${TRAIN_DIR} \
+#    --pretrained_epoch 0 \
+#    --gpu $GPU && \
 python train_alternate_mask_fpn_stage2.py \
    --network resnet_fpn \
    --dataset ${DATASET} \

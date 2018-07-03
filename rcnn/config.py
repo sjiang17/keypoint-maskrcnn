@@ -154,7 +154,7 @@ default.rcnn_epoch = 24
 default.rcnn_lr = default.base_lr
 default.rcnn_lr_step = '20'
 # default alternate
-default.alternate_prefix = 'model/alternate'
+default.alternate_prefix = 'model/alternate_coco_4gpu'
 
 # network settings
 network = edict()
