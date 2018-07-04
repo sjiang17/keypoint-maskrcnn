@@ -83,6 +83,6 @@ def main():
 
 
 if __name__ == '__main__':
-    import os
+    # import os
     # os.chdir('/mnt/truenas/scratch/siyu/maskrcnn')
     main()

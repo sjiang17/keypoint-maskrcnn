@@ -107,7 +107,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
-    max_label_shape.append(('mask_weight', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
+    # max_label_shape.append(('mask_weight', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
 
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
