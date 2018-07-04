@@ -106,7 +106,9 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('label', (input_batch_size, config.TRAIN.BATCH_ROIS)))
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
-    max_label_shape.append(('mask_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES, 28, 28)))
+    max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
+    max_label_shape.append(('mask_weight', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
+
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
     print('input shape')
@@ -197,7 +199,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     mask_log_loss = mx.metric.Loss(output_names=["mask_output_output"])
     eval_metrics = mx.metric.CompositeEvalMetric()
 
-    simple_metric = True
+    simple_metric = False
     if simple_metric:
         for child_metric in [eval_metric, cls_metric, bbox_metric, mask_log_loss]:
             eval_metrics.add(child_metric)

@@ -45,6 +45,7 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
     """
     return a dictionary that contains raw data.
     """
+    # print('_'*10, config.TRAIN.BATCH_ROIS, config.TRAIN.BATCH_IMAGES, '-'*10)
     assert config.TRAIN.BATCH_ROIS % config.TRAIN.BATCH_IMAGES == 0, \
         'BATCHIMAGES {} must divide BATCH_ROIS {}'.format(config.TRAIN.BATCH_IMAGES, config.TRAIN.BATCH_ROIS)
 
@@ -296,6 +297,8 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
 
 
     if mask_targets is not None:
+        # print("&&&&&&&&&&&&&& mask_targets shape:", mask_targets.shape)
+        # print("&&&&&&&&&&&&&& num_classes:", num_classes)
         return rois_on_levels, labels, bbox_targets, bbox_weights, mask_targets
     else:
         return rois_on_levels, labels, bbox_targets, bbox_weights

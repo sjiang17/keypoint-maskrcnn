@@ -6,7 +6,7 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/alternate_detection/
+TRAIN_DIR=model/res50-fpn/coco/alternate_coco_4gpu/
 DATASET=coco
 SET=train2017
 #TEST_SET=minival2014

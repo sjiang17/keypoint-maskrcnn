@@ -21,7 +21,7 @@ config.SCALES = [(1024, 2048)]  # first is scale (the shorter side); second is m
 config.ANCHOR_SCALES = (8,)
 config.ANCHOR_RATIOS = (0.5, 1, 2)
 config.NUM_ANCHORS = len(config.ANCHOR_SCALES) * len(config.ANCHOR_RATIOS)
-config.CLASS_ID = [0, 24, 25, 26, 27, 28, 31, 32, 33]
+config.CLASS_ID = [0, 1]
 config.SEG_CODE = 1000
 
 config.MEMORY = False
@@ -154,7 +154,7 @@ default.rcnn_epoch = 24
 default.rcnn_lr = default.base_lr
 default.rcnn_lr_step = '20'
 # default alternate
-default.alternate_prefix = 'model/alternate_coco_4gpu'
+default.alternate_prefix = 'model/alternate_coco_'
 
 # network settings
 network = edict()

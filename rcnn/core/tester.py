@@ -148,10 +148,13 @@ def generate_proposals(predictor, test_data, imdb, vis=False, thresh=0.):
 def im_detect_mask(predictor, data_batch, data_names, scale):
     output = predictor.predict(data_batch)
     data_dict = dict(zip(data_names, data_batch.data))
-
+    print(output.keys())
     if config.TEST.HAS_RPN:
-        pred_boxes = output['mask_roi_pred_boxes'].asnumpy()
-        scores = output['mask_roi_score'].asnumpy()
+        # pred_boxes = output['mask_roi_pred_boxes'].asnumpy()
+        # scores = output['mask_roi_score'].asnumpy()
+        pred_boxes = output['bbox_pred_reshape_output'].asnumpy()
+        scores = output['cls_prob_reshape_output'].asnumpy()
+        mask_output = output['mask_prob_output'].asnumpy()
     else:
         raise NotImplementedError
     # we used scaled image & roi to train, so it is necessary to transform them back
@@ -270,7 +273,8 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         roi_rec = roidb[img_ind]
         scale = im_info[0, 2]
         scores, boxes, data_dict, mask_output = im_detect_mask(predictor, data_batch, data_names, scale)
-        scores, boxes, mask_output = scores[0], boxes[0], mask_output[0]
+        print(mask_output.shape, scores.shape, boxes.shape)
+        scores, boxes = scores[0], boxes[0]
 
         all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
         all_masks = [[[] for _ in range(num_images)] for _ in range(num_classes)]

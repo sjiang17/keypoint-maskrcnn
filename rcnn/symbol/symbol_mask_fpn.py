@@ -1,5 +1,7 @@
 import mxnet as mx
-
+import sys
+sys.path.append('/mnt/truenas/scratch/siyu/maskrcnn')
+import rcnn
 from rcnn.config import config
 from rcnn.config import config as cfg
 from rcnn.PY_OP import fpn_roi_pooling, fpn_roi_crop, proposal_fpn, mask_roi, debug, renormalize_global_avg_pool,rpn_proposal
@@ -529,7 +531,12 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     # mask branch
     ####################################################################
     num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
-    mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
+    # print("************num_fg_rois", num_fg_rois)
+    # print("************num_classes", num_classes)
+    mask_pool = mask_pool.reshape(shape=(-1, config.TRAIN.BATCH_ROIS, 256, 14, 14))
+    mask_pool = mask_pool.slice_axis(axis=1, begin=0, end=num_fg_rois)
+    mask_pool = mask_pool.reshape(shape=(-1, 256, 14, 14))
+    # mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
 
     mask_conv_1 = mx.sym.Convolution(data=mask_pool, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_1")
     mask_relu_1 = mx.sym.Activation(data=mask_conv_1, act_type="relu", name="mask_relu_1")
@@ -549,11 +556,26 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
 
     mask_deconv_2 = mx.sym.Convolution(data=mask_relu_5, kernel=(1, 1), num_filter=num_classes, name="mask_deconv_2")
 
-    mask_deconv_2 = mask_deconv_2.reshape((1, -1))
-    mask_target = mask_target.reshape((1, -1))
     mask_loss = mx.sym.MultiLogistic(data=mask_deconv_2, label=mask_target,
                                                    grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
 
     mask_group = [mask_loss]
 
     return mx.sym.Group(rcnn_group + mask_group)
+
+if __name__ == '__main__':
+    rcnn.config.generate_config('resnet_fpn', 'coco')
+    sym = get_resnet_fpn_maskrcnn(2)
+    shape_dict = {
+        'bbox_target': (4L, 512L, 8L),
+        'bbox_weight': (4L, 512L, 8L),
+        'data': (4L, 3L, 800L, 1333L),
+        'label': (4L, 512L),
+        'mask_target': (4L, 64L, 2L, 28L, 28L),
+        'rois_stride16': (4L, 512L, 5L),
+        'rois_stride32': (4L, 512L, 5L),
+        'rois_stride4': (4L, 512L, 5L),
+        'rois_stride8': (4L, 512L, 5L)
+    }
+
+    sym.infer_shape(**shape_dict)
