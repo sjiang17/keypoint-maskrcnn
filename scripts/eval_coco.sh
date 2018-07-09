@@ -4,30 +4,30 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-while getopts ":m:p:" opt; do
-  case $opt in
-    m) MODEL="$OPTARG"
-    ;;
-    p) PREFIX="$OPTARG"
-    ;;
-    \?) echo "Invalid option -$OPTARG" >&2
-    ;;
-  esac
-done
+#while getopts ":m:p:" opt; do
+#  case $opt in
+#    m) MODEL="$OPTARG"
+#    ;;
+#    p) PREFIX="$OPTARG"
+#    ;;
+#    \?) echo "Invalid option -$OPTARG" >&2
+#    ;;
+#  esac
+#done
+#
+#if [ -z ${MODEL} ] || [ -z ${PREFIX} ]; then
+#  echo "usage: $0 -m[MODEL] -p[PREFIX]"
+#  exit -1
+#fi
+#
+#echo "MODEL=${MODEL}"
+#echo "PREFIX=${PREFIX}"
 
-if [ -z ${MODEL} ] || [ -z ${PREFIX} ]; then
-  echo "usage: $0 -m[MODEL] -p[PREFIX]"
-  exit -1
-fi
+GPU=3
 
-echo "MODEL=${MODEL}"
-echo "PREFIX=${PREFIX}"
-
-GPU=0
-
-TRAIN_DIR=model/res50-fpn/coco/${MODEL}/
+TRAIN_DIR=model/res50-fpn/coco/alternate_detection/
 DATASET=coco
-TEST_SET=minival2014
+TEST_SET=val2017
 
 mkdir -p eval_ins
 rm -rf eval_ins/*
@@ -38,6 +38,6 @@ python eval_maskrcnn.py \
     --has_rpn \
     --dataset ${DATASET} \
     --image_set ${TEST_SET} \
-    --prefix ${TRAIN_DIR}${PREFIX} \
+    --prefix ${TRAIN_DIR}final \
     --epoch 0 \
     --gpu $GPU

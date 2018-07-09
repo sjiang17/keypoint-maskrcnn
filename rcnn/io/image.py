@@ -215,6 +215,8 @@ def tensor_vstack(tensor_list, pad=0, shape=None, out=None):
             all_tensor = np.ones(tuple(dimensions), dtype=dtype)
         else:
             all_tensor = np.full(tuple(dimensions), pad, dtype=dtype)
+
+    # print('all_tensor:', all_tensor.shape)
     if ndim == 1:
         for ind, tensor in enumerate(tensor_list):
             all_tensor[ind * islice:(ind + 1) * islice] = tensor
@@ -226,6 +228,7 @@ def tensor_vstack(tensor_list, pad=0, shape=None, out=None):
             all_tensor[ind * islice:(ind + 1) * islice, :tensor.shape[1], :tensor.shape[2]] = tensor
     elif ndim == 4:
         for ind, tensor in enumerate(tensor_list):
+            # print('tensor:', tensor.shape)
             all_tensor[ind * islice:(ind + 1) * islice, :tensor.shape[1], :tensor.shape[2], :tensor.shape[3]] = tensor
     elif ndim == 5:
         for ind, tensor in enumerate(tensor_list):

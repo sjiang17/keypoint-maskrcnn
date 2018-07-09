@@ -38,7 +38,7 @@ config.TRAIN.SCALE_RANGE = (0.8, 1)
 
 # R-CNN
 # rcnn rois batch size
-config.TRAIN.BATCH_ROIS = 256
+config.TRAIN.BATCH_ROIS = 512
 
 # rcnn rois sampling params
 config.TRAIN.FG_FRACTION = 0.25
@@ -133,7 +133,7 @@ default = edict()
 default.network = 'resnet_fpn'
 default.pretrained = 'model/resnet-50'
 default.pretrained_epoch = 0
-default.base_lr = 0.01
+default.base_lr = 0.001
 # default dataset
 default.dataset = 'Cityscape'
 default.image_set = 'train'

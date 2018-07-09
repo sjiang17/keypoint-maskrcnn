@@ -6,11 +6,11 @@ export MXNET_GPU_WORKER_NTHREADS=4
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/alternate_detection/
+TRAIN_DIR=model/res50-fpn/coco/alternate_coco_4gpu/
 DATASET=coco
-SET=minival2014
+SET=val2017
 mkdir -p ${TRAIN_DIR}
-GPU=0,1,2,3,4,5,6,7
+GPU=0
 PRETRAIN=resnet-50
 
 echo "current workspace: $(pwd)"

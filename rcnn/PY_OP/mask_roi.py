@@ -59,12 +59,12 @@ class MaskROIOperator(mx.operator.CustomOp):
             output_boxes = np.concatenate((batch_inds, output_boxes), axis=1)
             # take topk
             top_inds = np.argsort(np.max(scores, axis=1))[-self.topk:]
-            output_boxes = output_boxes.reshape((num_img, self.topk, 5))
-            pred_boxes = pred_boxes.reshape((num_img, self.topk, num_cls * 4))
-            scores = scores.reshape((num_img, self.topk, num_cls))
-            #output_boxes = output_boxes[top_inds].reshape((num_img, self.topk, 5))
-            #pred_boxes = pred_boxes[top_inds].reshape((num_img, self.topk, num_cls * 4))
-            #scores = scores[top_inds].reshape((num_img, self.topk, num_cls))
+            #output_boxes = output_boxes.reshape((num_img, self.topk, 5))
+            #pred_boxes = pred_boxes.reshape((num_img, self.topk, num_cls * 4))
+            #scores = scores.reshape((num_img, self.topk, num_cls))
+            output_boxes = output_boxes[top_inds].reshape((num_img, self.topk, 5))
+            pred_boxes = pred_boxes[top_inds].reshape((num_img, self.topk, num_cls * 4))
+            scores = scores[top_inds].reshape((num_img, self.topk, num_cls))
 
             self.assign(out_data[0], req[0], output_boxes)
             self.assign(out_data[1], req[1], pred_boxes)

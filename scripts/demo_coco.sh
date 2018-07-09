@@ -4,7 +4,7 @@ export PYTHONUNBUFFERED=1
 MODEL_PATH=model/res50-fpn/coco/alternate_detection/
 RESULT_PATH=data/coco/results/alternate_detection/
 
-PREFIX=${MODEL_PATH}final
+PREFIX=${MODEL_PATH}convertedfinal
 DATASET=coco
 SET=train
 TEST_SET=val2017

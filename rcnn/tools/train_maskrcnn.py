@@ -40,7 +40,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                    ctx, pretrained, epoch, prefix, begin_epoch, end_epoch,
                    train_shared, lr, lr_step, proposal, maskrcnn_stage=None):
     # set up maskrcnn
-    cfg.MASKFCN.ON = False
+    cfg.MASKFCN.ON = False #####??
 
     # set up logger
     logging.basicConfig()
@@ -48,11 +48,11 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     logger.setLevel(logging.INFO)
 
     # load symbol
-    sym = eval('get_' + network + '_maskrcnn')(num_classes=config.NUM_CLASSES)
+    sym = eval('get_' + network + '_maskrcnn')(num_classes=config.NUM_CLASSES) # get_resnet_fpn_maskrcnn
 
     # setup multi-gpu
     batch_size = len(ctx)
-    input_batch_size = config.TRAIN.BATCH_IMAGES * batch_size
+    input_batch_size = config.TRAIN.BATCH_IMAGES * batch_size # 1 * num of gpus
     print(input_batch_size)
     # print config
     pprint.pprint(config)
@@ -60,12 +60,15 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     roidb_file = root_path + '/cache/' + dataset + '_roidb_with_mask.pkl'
     mean_file = root_path + '/cache/' + dataset + '_roidb_mean.pkl'
     std_file = root_path + '/cache/' + dataset + '_roidb_std.pkl'
+
+    # mask rcnn _stage = rcnn1
     if maskrcnn_stage is not None:
         roidb_file = root_path + '/cache/' + dataset + '_roidb_with_mask_' + maskrcnn_stage + '.pkl'
         mean_file = root_path + '/cache/' + dataset + '_roidb_mean_' + maskrcnn_stage + '.pkl'
         std_file = root_path + '/cache/' + dataset + '_roidb_std_' + maskrcnn_stage + '.pkl'
 
-    if False and osp.exists(roidb_file) and osp.exists(mean_file) and osp.exists(std_file):
+    #### ?? removed False
+    if osp.exists(roidb_file) and osp.exists(mean_file) and osp.exists(std_file):
         print('Load ' + roidb_file)
         with open(roidb_file, 'r') as f:
             roidb = pkl.load(f)
@@ -78,6 +81,8 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     else:
         # load dataset and prepare imdb for training
         image_sets = [iset for iset in image_set.split('+')]
+
+        # load proposal from rpn generated rois, also append ground truth boxes as rois for training.
         roidbs = [load_proposal_roidb(dataset, image_set, root_path, dataset_path, proposal=proposal, append_gt=True,
                                       flip=not no_flip, load_memory=config.MEMORY, use_mask=True)
                   for image_set in image_sets]
@@ -93,7 +98,9 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                 pkl.dump(obj, f, -1)
 
     # load training data
+    print("Use ASPECT_GROUPING:", config.TRAIN.ASPECT_GROUPING)
     MaskROIIter = ThreadedAspectMaskROIIter if config.TRAIN.ASPECT_GROUPING else ThreadedMaskROIIter
+    print("MaskROIIter:", MaskROIIter)
     train_data = MaskROIIter(roidb, batch_size=input_batch_size, shuffle=not no_shuffle,
                              short=config.SCALES[0][0], long=config.SCALES[0][1], num_thread=16)
 
@@ -107,13 +114,14 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
+    # max_label_shape.append(('mask_target', (input_batch_size,config.TRAIN.BATCH_ROIS, config.NUM_CLASSES, 28, 28)))
     # max_label_shape.append(('mask_weight', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
 
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
     print('input shape')
     pprint.pprint(data_shape_dict)
-
+    # data_shape_dict['mask_target'] = (1L, 128L, 2L, 28L, 28L)
     arg_shape, out_shape, aux_shape = sym.infer_shape(**data_shape_dict)
     arg_shape_dict = dict(zip(sym.list_arguments(), arg_shape))
     out_shape_dict = zip(sym.list_outputs(), out_shape)
@@ -125,11 +133,16 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     if resume:
         arg_params, aux_params = load_param(prefix, begin_epoch, convert=True)
     else:
+        print('pretrained', pretrained)
         arg_params, aux_params = load_param(pretrained, epoch, convert=True)
         normal0001 = mx.init.Normal(sigma=0.001)
         normal001 = mx.init.Normal(sigma=0.01)
         msra = mx.init.Xavier(factor_type="in", rnd_type='gaussian', magnitude=2)
         xavier = mx.init.Xavier(factor_type="in", rnd_type="uniform", magnitude=3)
+        # print('sym.list_arguments()', sym.list_arguments())
+        # print('arg_params', arg_params)
+        # print('aux_params', aux_params)
+
         for k in sym.list_arguments():
             if k in data_shape_dict:
                 continue
@@ -156,6 +169,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                 else:
                     raise KeyError("unknown parameter tpye %s" % k)
 
+        print('sym.list_auxiliary_states()', sym.list_auxiliary_states())
         for k in sym.list_auxiliary_states():
             if k not in aux_params:
                 print('init %s' % k)
@@ -180,6 +194,8 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     # create solver
     data_names = [k[0] for k in train_data.provide_data]
     label_names = [k[0] for k in train_data.provide_label]
+    print('data_names', data_names)
+    print('label_names', label_names)
     if train_shared:
         fixed_param_prefix = config.FIXED_PARAMS_SHARED
     else:
@@ -199,7 +215,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     mask_log_loss = mx.metric.Loss(output_names=["mask_output_output"])
     eval_metrics = mx.metric.CompositeEvalMetric()
 
-    simple_metric = False
+    simple_metric = True
     if simple_metric:
         for child_metric in [eval_metric, cls_metric, bbox_metric, mask_log_loss]:
             eval_metrics.add(child_metric)

@@ -18,12 +18,12 @@ def alternate_train(args, ctx, pretrained, epoch,
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     # basic config
-    begin_epoch = 0
+    begin_epoch = 3
     config.TRAIN.BG_THRESH_LO = 0.0
 
     # model path
     model_path = args.prefix
-
+    args.resume = True
     logging.info('########## TRAIN RCNN WITH IMAGENET INIT AND RPN DETECTION')
     train_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path,
                    args.frequent, args.kvstore, args.work_load_list, args.no_flip, args.no_shuffle, args.resume,
@@ -74,7 +74,7 @@ def main():
     # args.pretrained = 'model/resnet-50'
     # args.prefix = 'model/res50-fpn/coco/alternate_coco_4gpu/'
     # args.pretrained_epoch = 0
-    # args.gpus = '0,1,2,3'
+    # args.gpus = '0'
     print 'Called with argument:', args
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')]
     alternate_train(args, ctx, args.pretrained, args.pretrained_epoch,

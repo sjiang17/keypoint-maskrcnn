@@ -24,10 +24,11 @@ def demo_maskrcnn(network, dataset, image_set, root_path, dataset_path, result_p
 
     # load symbol and testing data
     if has_rpn:
-        if cfg.MASKFCN.ON:
+        if config.MASKFCN.ON:
             sym = \
                 eval('get_' + network + '_maskfcn_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
         else:
+            print('get_' + network + '_mask_test')
             sym = eval('get_' + network + '_mask_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
         imdb = eval(dataset)(image_set, root_path, dataset_path)
         roidb = imdb.gt_roidb()
@@ -69,7 +70,7 @@ def demo_maskrcnn(network, dataset, image_set, root_path, dataset_path, result_p
     aux_shape_dict = dict(zip(sym.list_auxiliary_states(), aux_shape))
 
     # check parameters
-    for k in sym.list_arguments():
+    for k in sorted(sym.list_arguments()):
         if k in data_shape_dict or 'label' in k:
             continue
         assert k in arg_params, k + ' not initialized'

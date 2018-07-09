@@ -63,19 +63,13 @@ def im_proposal(predictor, data_batch, data_names, scale):
         scores[i] = scores[i][:config.TRAIN.PROPOSAL_POST_NMS_TOP_N][:, None]
 
     for i in range(len(boxes)):
-        #print ("boxes[%s] shape:%s"%(i, str(boxes[i].shape)))
-        #print ("scores[%s] shape:%s"%(i, str(scores[i].shape)))
         num_proposals = (boxes[i].shape)[0]
-        #np.save("boxes", boxes[i])
-        #np.save("scores", scores[i])
         if num_proposals < config.TRAIN.PROPOSAL_POST_NMS_TOP_N:
             pad_num = config.TRAIN.PROPOSAL_POST_NMS_TOP_N - num_proposals
             for idx in range(pad_num):
                 rand_idx = np.random.randint(0, num_proposals)
                 boxes[i] =  np.row_stack((boxes[i], boxes[i][rand_idx]))
                 scores[i] =  np.row_stack((scores[i], scores[i][rand_idx]))
-        #print ("boxes[%s] shape:%s"%(i, str(boxes[i].shape)))
-        #print ("scores[%s] shape:%s"%(i, str(scores[i].shape)))
 
     boxes = np.array(boxes)
     scores = np.array(scores)
@@ -109,20 +103,11 @@ def generate_proposals(predictor, test_data, imdb, vis=False, thresh=0.):
 
         scale = im_info[:, 2]
         scores, boxes, data_dict = im_proposal(predictor, data_batch, data_names, scale)
-        #np.save("scores", scores)
-        #np.save("boxes", boxes)
-        #print ("boxes shape:%s"%str(boxes.shape))
-        #print ("scores shape:%s"%str(scores.shape))
-        #print ("data_batch.pad:%s"%data_batch.pad)
         t2 = time.time() - t
         t = time.time()
 
         for ii in range(scores.shape[0] - data_batch.pad):
             # assemble proposals
-            #print ("boxes[%s] shape:%s"%(ii, str(boxes[ii].shape)))
-            #print ("scores[%s] shape:%s"%(ii, str(scores[ii].shape)))
-            #if boxes[ii].shape != scores[ii].shape:
-            #    continue
             dets = np.concatenate((boxes[ii], scores[ii]), axis=-1)
             original_boxes.append(dets)
 
@@ -137,8 +122,9 @@ def generate_proposals(predictor, test_data, imdb, vis=False, thresh=0.):
             i += 1
         t3 = time.time() - t
         t = time.time()
-        print('generating %d/%d' % (i + 1, imdb.num_images) + ' proposal %d' % (dets.shape[0]) +
-              ' data %.4fs net %.4fs post %.4fs' % (t1, t2, t3))
+        if i % 100 == 0:
+            print('generating %d/%d' % (i + 1, imdb.num_images) + ' proposal %d' % (dets.shape[0]) +
+                ' data %.4fs net %.4fs post %.4fs' % (t1, t2, t3))
 
     assert len(imdb_boxes) == imdb.num_images, 'calculations not complete'
 
@@ -148,13 +134,12 @@ def generate_proposals(predictor, test_data, imdb, vis=False, thresh=0.):
 def im_detect_mask(predictor, data_batch, data_names, scale):
     output = predictor.predict(data_batch)
     data_dict = dict(zip(data_names, data_batch.data))
-    print(output.keys())
+    # print(output.keys()) ['mask_roi_score', 'mask_prob_output', 'mask_roi_pred_boxes']
     if config.TEST.HAS_RPN:
-        # pred_boxes = output['mask_roi_pred_boxes'].asnumpy()
-        # scores = output['mask_roi_score'].asnumpy()
-        pred_boxes = output['bbox_pred_reshape_output'].asnumpy()
-        scores = output['cls_prob_reshape_output'].asnumpy()
-        mask_output = output['mask_prob_output'].asnumpy()
+        pred_boxes = output['mask_roi_pred_boxes'].asnumpy()
+        scores = output['mask_roi_score'].asnumpy()
+        mask_outputs = output['mask_prob_output'].asnumpy()
+        mask_outputs = mask_outputs.reshape((data_batch.data[0].shape[0], -1) + mask_outputs.shape[1:])
     else:
         raise NotImplementedError
     # we used scaled image & roi to train, so it is necessary to transform them back
@@ -163,7 +148,7 @@ def im_detect_mask(predictor, data_batch, data_names, scale):
     elif isinstance(scale, np.ndarray):
         pred_boxes = pred_boxes / scale[:, None, None]
 
-    return scores, pred_boxes, data_dict
+    return scores, pred_boxes, data_dict, mask_outputs
 
 
 def pred_eval_mask(predictor, test_data, imdb, roidb, result_path, vis=False, thresh=1e-1):
@@ -186,6 +171,7 @@ def pred_eval_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
 
     results_list = []
     all_boxes = [[None for _ in range(num_images)] for _ in range(num_classes)]  # (#cls, #img)
+    all_masks = [[None for _ in range(num_images)] for _ in range(num_classes)]  # (#cls, #img)
 
     img_ind = 0
     t = time.time()
@@ -195,51 +181,62 @@ def pred_eval_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         t = time.time()
 
         scales = im_infos[:, 2]
-        scores, boxes, data_dict = im_detect_mask(predictor, data_batch, data_names, scales)
+        scores, boxes, data_dict, mask_outputs = im_detect_mask(predictor, data_batch, data_names, scales)
 
         t2 = time.time() - t
         t = time.time()
 
         for i in range(data_batch.data[0].shape[0] - data_batch.pad):
-            score, box, im_info = scores[i], boxes[i], im_infos[i:i + 1]
+            score, box, mask_output, im_info = scores[i], boxes[i], mask_outputs[i], im_infos[i:i + 1]
             roi_rec = roidb[img_ind]
             label = np.argmax(score, axis=1)
             label = label[:, np.newaxis]
 
-            for j in range(1, num_classes):
+
+            for cls_ind in range(num_classes):
+                cls_boxes = box[:, 4 * cls_ind:4 * (cls_ind + 1)]
+                cls_masks = mask_output[:, cls_ind, :, :]
+                cls_scores = score[:, cls_ind, np.newaxis]
+                keep = np.where((cls_scores >= thresh) & (label == cls_ind))[0]
+                cls_masks = cls_masks[keep, :, :]
+                dets = np.hstack((cls_boxes, cls_scores)).astype(np.float32)[keep, :]
+                keep = nms(dets)
+                all_boxes[cls_ind][img_ind] = dets[keep, :]
+                all_masks[cls_ind][img_ind] = cls_masks[keep, :]
+
+            """for j in range(1, num_classes):
                 inds = np.where(score[:, j] > SCORE_THRESH)[0]
+                cls_masks = mask_output[:, j, :, :]
                 score_j = score[inds, j]
                 box_j = box[inds, j * 4:(j + 1) * 4]
                 dets_j = np.hstack((box_j, score_j[:, np.newaxis])).astype(np.float32, copy=False)
+                cls_masks = cls_masks[inds, :, :]
                 #nms
                 keep = nms(dets_j)
                 nms_dets = dets_j[keep, :]
                 all_boxes[j][img_ind] = nms_dets
-
-            """for cls_ind in range(num_classes):
-                cls_boxes = box[:, 4 * cls_ind:4 * (cls_ind + 1)]
-                cls_scores = score[:, cls_ind, np.newaxis]
-                keep = np.where((cls_scores >= thresh) & (label == cls_ind))[0]
-                dets = np.hstack((cls_boxes, cls_scores)).astype(np.float32)[keep, :]
-                keep = nms(dets)
-                all_boxes[cls_ind][img_ind] = dets[keep, :]
-            """
+                all_masks[j][img_ind] = cls_masks[keep, :]"""
 
             # the first class is empty because it is background
             boxes_this_image = [[]] + [all_boxes[cls_ind][img_ind] for cls_ind in range(1, num_classes)]
+            masks_this_image = [[]] + [all_masks[cls_ind][img_ind] for cls_ind in range(1, num_classes)]
 
             results_list.append({'image': roi_rec['image'],
                                  'im_info': im_info,
-                                 'boxes': boxes_this_image})
+                                 'boxes': boxes_this_image,
+                                 'masks': masks_this_image})
             t3 = time.time() - t
             t = time.time()
-            print('testing {}/{} data {:.4f}s net {:.4f}s post {:.4f}s'.format(img_ind + 1, num_images, t1, t2, t3))
+            if img_ind % 100 == 0:
+                print('testing {}/{} data {:.4f}s net {:.4f}s post {:.4f}s'.format(img_ind + 1, num_images, t1, t2, t3))
             img_ind += 1
 
     results_pack = {'all_boxes': all_boxes,
+                    'all_masks': all_masks,
                     'results_list': results_list}
 
     imdb.evaluate_mask(results_pack)
+    imdb.evaluate_detections(results_pack)
 
 
 def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, thresh=1e-1):
@@ -273,8 +270,10 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         roi_rec = roidb[img_ind]
         scale = im_info[0, 2]
         scores, boxes, data_dict, mask_output = im_detect_mask(predictor, data_batch, data_names, scale)
-        print(mask_output.shape, scores.shape, boxes.shape)
-        scores, boxes = scores[0], boxes[0]
+        scores, boxes, mask_output = scores[0], boxes[0], mask_output[0]
+
+        # print (mask_output[0])
+        print (sum(scores[:,1] < scores[:,0]))
 
         all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
         all_masks = [[[] for _ in range(num_images)] for _ in range(num_classes)]
@@ -298,9 +297,10 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         boxes_this_image = [[]] + [all_boxes[j] for j in range(1, num_classes)]
         masks_this_image = [[]] + [all_masks[j] for j in range(1, num_classes)]
         filename = roi_rec['image'].split("/")[-1]
-        filename = result_path + '/' + filename.replace('.png', '') + '.jpg'
+        filename = result_path + '/' + filename.replace('.png', '.jpg')
         data_dict = dict(zip(data_names, data_batch.data))
         draw_detection_mask(data_dict['data'], boxes_this_image, masks_this_image, 1.0, filename, imdb.classes)
+        # draw_detection(data_dict['data'], boxes_this_image, 1.0, filename)
         img_ind += 1
 
 
@@ -328,12 +328,17 @@ def vis_all_detection(im_array, detections, class_names, scale):
             rect = plt.Rectangle((bbox[0], bbox[1]),
                                  bbox[2] - bbox[0],
                                  bbox[3] - bbox[1], fill=False,
-                                 edgecolor=color, linewidth=3.5)
+                                 edgecolor=color, linewidth=1.5)
             plt.gca().add_patch(rect)
             plt.gca().text(bbox[0], bbox[1] - 2,
                            '{:s} {:.3f}'.format(name, score),
-                           bbox=dict(facecolor=color, alpha=0.5), fontsize=12, color='white')
-    plt.show()
+                           bbox=dict(facecolor=color, alpha=0.5), fontsize=8, color='white')
+    # plt.show()
+    save_name = '/mnt/truenas/scratch/siyu/maskrcnn/output/rpn/{}.jpg'.format(random.randint(0, 10000))
+    print(save_name)
+    plt.axis('off')
+    plt.savefig(save_name)
+    plt.close('all')
 
 
 def draw_detection_mask(im_array, boxes_this_image, masks_this_image, scale, filename, class_names):
@@ -347,6 +352,7 @@ def draw_detection_mask(im_array, boxes_this_image, masks_this_image, scale, fil
         color = (random.randint(0, 256), random.randint(0, 256), random.randint(0, 256))  # generate a random color
         dets = boxes_this_image[j]
         masks = masks_this_image[j]
+        print('len(dets):', len(dets))
         for i in range(len(dets)):
             bbox = dets[i, :4] * scale
             score = dets[i, -1]
@@ -355,14 +361,7 @@ def draw_detection_mask(im_array, boxes_this_image, masks_this_image, scale, fil
             cv2.putText(im, '%s %.3f' % (class_names[j], score), (bbox[0], bbox[1] + 10),
                         color=color_white, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
             mask = masks[i, :, :]
-            if cfg.MASKFCN.ON:
-                scale_factor = get_scale_factor(max(bbox[2] - bbox[0], bbox[3] - bbox[1]))
-                mask_box = [coord / int(scale_factor) for coord in bbox]
-                mask = mask[0:mask_box[3] - mask_box[1], 0:mask_box[2] - mask_box[0]]
-                mask = cv2.resize(mask, dsize=None, fx=int(scale_factor), fy=int(scale_factor))
-                bbox = [coord * int(scale_factor) for coord in mask_box]
-            else:
-                mask = cv2.resize(mask, (bbox[2] - bbox[0], (bbox[3] - bbox[1])), interpolation=cv2.INTER_LINEAR)
+            mask = cv2.resize(mask, (bbox[2] - bbox[0], (bbox[3] - bbox[1])), interpolation=cv2.INTER_LINEAR)
             mask[mask > 0.5] = 1
             mask[mask <= 0.5] = 0
             mask_color = random.randint(80, 100)
@@ -385,7 +384,7 @@ def draw_detection(im_array, boxes_this_image, scale, filename):
     """
     import cv2
     import random
-    class_names = ('__background__', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'mcycle', 'bicycle')
+    class_names = ('__background__', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle', 'bicycle')
     color_white = (255, 255, 255)
     im = image.transform_inverse(im_array.asnumpy(), config.PIXEL_MEANS)
     # change to bgr
@@ -395,6 +394,7 @@ def draw_detection(im_array, boxes_this_image, scale, filename):
             continue
         color = (random.randint(0, 256), random.randint(0, 256), random.randint(0, 256))  # generate a random color
         dets = boxes_this_image[j]
+        print ('num of detected boxes:', len(dets))
         for det in dets:
             bbox = det[:4] * scale
             score = det[-1]

@@ -56,6 +56,8 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
                   random_scale_range=config.TRAIN.SCALE_RANGE,
                   fixed_multi_scales=config.SCALES,
                   pixel_mean=config.PIXEL_MEANS)
+    # print('max_shape:', max_shape)
+    # print('imgs:', len(imgs))
     im_array = tensor_vstack(imgs, shape=max_shape)
 
     # sample rois

@@ -19,7 +19,7 @@ def load_proposal_roidb(dataset_name, image_set_name, root_path, dataset_path,
     """ load proposal roidb (append_gt when training) """
     imdb = eval(dataset_name)(image_set_name, root_path, dataset_path, load_memory, use_mask, panoptic)
     gt_roidb = imdb.gt_roidb()
-    roidb = eval('imdb.' + proposal + '_roidb')(gt_roidb, append_gt)
+    roidb = eval('imdb.' + proposal + '_roidb')(gt_roidb, append_gt) #rpn_roidb
     """import pickle as pkl
     output = open('data.pkl', 'wb')
     pkl.dump(roidb, output, -1)

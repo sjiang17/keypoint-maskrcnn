@@ -1,9 +1,12 @@
 import argparse
 
 import mxnet as mx
-
+import sys
+sys.path.append('/mnt/truenas/scratch/siyu/maskrcnn')
+import rcnn
 from rcnn.config import config, default, generate_config
 from rcnn.tools.demo_maskrcnn import demo_maskrcnn
+
 
 
 def parse_args():
@@ -13,6 +16,8 @@ def parse_args():
     parser.add_argument('--dataset', help='dataset name', default=default.dataset, type=str)
     args, rest = parser.parse_known_args()
     generate_config(args.network, args.dataset)
+    # rcnn.config.generate_config('resnet_fpn', 'coco')
+
     parser.add_argument('--image_set', help='image_set name', default=default.test_image_set, type=str)
     parser.add_argument('--root_path', help='output data folder', default=default.root_path, type=str)
     parser.add_argument('--dataset_path', help='dataset path', default=default.dataset_path, type=str)
@@ -33,6 +38,15 @@ def parse_args():
 
 def main():
     args = parse_args()
+    # args.network = 'resnet_fpn'
+    # args.dataset = 'coco'
+    # args.image_set = 'val2017'
+    # args.prefix = 'model/res50-fpn/coco/alternate_coco_4gpu/final'
+    # args.result_path = 'results/coco/alternate_coco_4gpu/'
+    # args.has_rpn = True
+    # args.epoch = 0
+    # args.gpus = '0'
+
     ctx = [mx.gpu(int(gpu)) for gpu in args.gpu.split(',')]
     print(args)
     demo_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path, args.result_path,
@@ -40,4 +54,6 @@ def main():
 
 
 if __name__ == '__main__':
+    # import os
+    # os.chdir('/mnt/truenas/scratch/siyu/maskrcnn')
     main()

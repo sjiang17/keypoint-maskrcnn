@@ -63,38 +63,19 @@ def get_resnet_conv(data):
                              name='stage2_unit%s' % i)
     conv_c3 = unit
 
-    if cfg.MASKFCN.DILATED:
-        # res4, stride 16
-        unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(2, 2), dilate=(2, 2), dim_match=False,
-                             name='stage3_unit1')
-        dilates = [(2, 2), (5, 5), (9, 9), (1, 1), (2, 2)]
-        for i in range(2, units[2] + 1):
-            unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(1, 1), dilate=dilates[i-2],
-                                 dim_match=True, name='stage3_unit%s' % i)
-        conv_c4 = unit
+    # res4, stride 16
+    unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(2, 2), dim_match=False, name='stage3_unit1')
+    for i in range(2, units[2] + 1):
+        unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(1, 1), dim_match=True,
+                             name='stage3_unit%s' % i)
+    conv_c4 = unit
 
-        # res5, stride 32
-        unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(2, 2), dilate=(5, 5), dim_match=False,
-                             name='stage4_unit1')
-        dilates = [(9, 9), (17, 17)]
-        for i in range(2, units[3] + 1):
-            unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(1, 1), dilate=dilates[i-2],
-                                 dim_match=True, name='stage4_unit%s' % i)
-        conv_c5 = unit
-    else:
-        # res4, stride 16
-        unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(2, 2), dim_match=False, name='stage3_unit1')
-        for i in range(2, units[2] + 1):
-            unit = residual_unit(data=unit, num_filter=filter_list[2], stride=(1, 1), dim_match=True,
-                                 name='stage3_unit%s' % i)
-        conv_c4 = unit
-
-        # res5, stride 32
-        unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(2, 2), dim_match=False, name='stage4_unit1')
-        for i in range(2, units[3] + 1):
-            unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(1, 1), dim_match=True,
-                                 name='stage4_unit%s' % i)
-        conv_c5 = unit
+    # res5, stride 32
+    unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(2, 2), dim_match=False, name='stage4_unit1')
+    for i in range(2, units[3] + 1):
+        unit = residual_unit(data=unit, num_filter=filter_list[3], stride=(1, 1), dim_match=True,
+                             name='stage4_unit%s' % i)
+    conv_c5 = unit
 
     conv_feat = [conv_c5, conv_c4, conv_c3, conv_c2]
     return conv_feat
@@ -137,6 +118,7 @@ def get_resnet_conv_down(conv_feat):
     conv_fpn_feat.update({"stride64": p6, "stride32": p5_conv, "stride16": p4_conv, "stride8": p3_conv, "stride4": p2_conv})
 
     return conv_fpn_feat, [p6, p5_conv, p4_conv, p3_conv, p2_conv]
+
 
 def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS):
     data = mx.symbol.Variable(name="data")
@@ -214,8 +196,8 @@ def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.
         rpn_rois, rpn_scores = mx.sym.contrib.Proposal(cls_prob=rpn_cls_prob_reshape,
                                                        bbox_pred=rpn_bbox_pred,
                                                        im_info=im_info,
-                                                       rpn_pre_nms_top_n=config.TEST.PROPOSAL_PRE_NMS_TOP_N,
-                                                       rpn_post_nms_top_n=config.TEST.PROPOSAL_POST_NMS_TOP_N,
+                                                       rpn_pre_nms_top_n=config.TEST.RPN_PRE_NMS_TOP_N,
+                                                       rpn_post_nms_top_n=config.TEST.RPN_POST_NMS_TOP_N,
                                                        feature_stride=stride,
                                                        output_score=True,
                                                        scales=tuple(config.ANCHOR_SCALES),
@@ -227,7 +209,6 @@ def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.
         rpn_rois_list.append(mx.sym.Reshape(data=rpn_rois, shape=(-1, 5)))
         rpn_cls_list.append(mx.sym.Reshape(data=rpn_scores, shape=(-1, 1)))
 
-    
     # fpn rois
     # fpn_roi_feats = list()
     rpn_rois_concat = mx.sym.concat(*rpn_rois_list, dim=0, name="rpn_rois")
@@ -307,7 +288,8 @@ def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.
                                           name="mask_deconv2")
     # group output
     mask_prob = mx.symbol.Activation(data=mask_deconv_2, act_type='sigmoid', name="mask_prob")
-    group = mx.symbol.Group([rois, rcnn_bbox_pred, rcnn_cls_prob, mask_prob])
+    #group = mx.symbol.Group([rois, rcnn_bbox_pred, rcnn_cls_prob, mask_prob])
+    group = mx.symbol.Group([pred_boxes, score, mask_prob])
     return group
 
 def get_resnet_fpn_rpn(num_anchors=config.NUM_ANCHORS):
@@ -490,13 +472,17 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     roi_pool = mx.sym.add_n(*fpn_roi_feats)
 
     mask_roi_feats = list()
+    temp_debug = []
     for stride in rcnn_feat_stride:
         feat_lvl = conv_fpn_feat["stride%s" % stride]
         rois_lvl = rois["stride%s" % stride]
+        temp_debug.append(feat_lvl)
         mask_feat = mx.sym.contrib.ROIAlign_v2(
             name="roi_mask", data=feat_lvl, rois=rois_lvl, pooled_size=(14, 14), spatial_scale=1.0 / stride)
         mask_roi_feats.append(mask_feat)
     # merge rois from different levels
+    # each mask_feat is 512 * 256 * 14 * 14 ????
+    # why add them element wise?
     mask_pool = mx.sym.add_n(*mask_roi_feats)
 
     ######################################################################
@@ -531,11 +517,11 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     # mask branch
     ####################################################################
     num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
-    # print("************num_fg_rois", num_fg_rois)
-    # print("************num_classes", num_classes)
+
     mask_pool = mask_pool.reshape(shape=(-1, config.TRAIN.BATCH_ROIS, 256, 14, 14))
     mask_pool = mask_pool.slice_axis(axis=1, begin=0, end=num_fg_rois)
     mask_pool = mask_pool.reshape(shape=(-1, 256, 14, 14))
+
     # mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
 
     mask_conv_1 = mx.sym.Convolution(data=mask_pool, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_1")
@@ -556,8 +542,13 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
 
     mask_deconv_2 = mx.sym.Convolution(data=mask_relu_5, kernel=(1, 1), num_filter=num_classes, name="mask_deconv_2")
 
-    mask_loss = mx.sym.MultiLogistic(data=mask_deconv_2, label=mask_target,
-                                                   grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
+    mask_deconv_2 = mask_deconv_2.reshape((1, -1))
+    mask_target = mask_target.reshape((1, -1))
+    mask_loss = mx.sym.contrib.SigmoidCrossEntropy(data=mask_deconv_2, label=mask_target,
+                                                    grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
+
+    # mask_loss = mx.sym.MultiLogistic(data=mask_deconv_2, label=mask_target,
+    #                                               grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
 
     mask_group = [mask_loss]
 
@@ -567,15 +558,17 @@ if __name__ == '__main__':
     rcnn.config.generate_config('resnet_fpn', 'coco')
     sym = get_resnet_fpn_maskrcnn(2)
     shape_dict = {
-        'bbox_target': (4L, 512L, 8L),
-        'bbox_weight': (4L, 512L, 8L),
-        'data': (4L, 3L, 800L, 1333L),
-        'label': (4L, 512L),
-        'mask_target': (4L, 64L, 2L, 28L, 28L),
-        'rois_stride16': (4L, 512L, 5L),
-        'rois_stride32': (4L, 512L, 5L),
-        'rois_stride4': (4L, 512L, 5L),
-        'rois_stride8': (4L, 512L, 5L)
+        'bbox_target': (1L, 512L, 8L),
+        'bbox_weight': (1L, 512L, 8L),
+        'data': (1L, 3L, 800L, 1333L),
+        'label': (1L, 512L),
+        'mask_target': (1L, 64L, 2L, 28L, 28L),
+        'rois_stride16': (1L, 512L, 5L),
+        'rois_stride32': (1L, 512L, 5L),
+        'rois_stride4': (1L, 512L, 5L),
+        'rois_stride8': (1L, 512L, 5L)
     }
 
-    sym.infer_shape(**shape_dict)
+    arg_shape, out_shape, aux_shape = sym.infer_shape(**shape_dict)
+    import pprint
+    pprint.pprint(out_shape)

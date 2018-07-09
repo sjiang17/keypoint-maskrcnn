@@ -6,7 +6,7 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/alternate_coco_4gpu/
+TRAIN_DIR=model/res50-fpn/coco/alternate_1gpu_recompile/
 DATASET=coco
 SET=train2017
 #TEST_SET=minival2014
@@ -15,7 +15,7 @@ mkdir -p ${TRAIN_DIR}
 # Train
 echo "current workspace: $(pwd)"
 
-GPU=0,1,2,3
+GPU=0
 #GPU=0
 
 # Train

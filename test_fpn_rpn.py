@@ -26,7 +26,7 @@ def alternate_train(args, ctx, pretrained, epoch,
     image_sets = [iset for iset in args.image_set.split('+')]
     for image_set in image_sets:
         test_rpn(args.network, args.test_dataset, image_set, args.root_path, args.dataset_path,
-                 ctx, model_path + '/rpn1', rpn_epoch, vis=False, shuffle=False, thresh=0)
+                 ctx, model_path + '/rpn1', rpn_epoch, vis=True, shuffle=False, thresh=0.7)
 
 
 def parse_args():
@@ -34,7 +34,7 @@ def parse_args():
     # general
     parser.add_argument('--network', help='network name', default=default.network, type=str)
     parser.add_argument('--dataset', help='dataset name', default=default.dataset, type=str)
-    parser.add_argument('--test-dataset', help='test dataset name', default="minival2014", type=str)
+    parser.add_argument('--test-dataset', help='test dataset name', default="coco", type=str)
     args, rest = parser.parse_known_args()
     generate_config(args.network, args.dataset)
     parser.add_argument('--image_set', help='image_set name', default=default.image_set, type=str)
