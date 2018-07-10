@@ -45,7 +45,6 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
     """
     return a dictionary that contains raw data.
     """
-    # print('_'*10, config.TRAIN.BATCH_ROIS, config.TRAIN.BATCH_IMAGES, '-'*10)
     assert config.TRAIN.BATCH_ROIS % config.TRAIN.BATCH_IMAGES == 0, \
         'BATCHIMAGES {} must divide BATCH_ROIS {}'.format(config.TRAIN.BATCH_IMAGES, config.TRAIN.BATCH_ROIS)
 
@@ -170,12 +169,14 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     # foreground RoI with FG_THRESH overlap
     fg_indexes = np.where(overlaps >= config.TRAIN.FG_THRESH)[0]
     # guard against the case when an image has fewer than fg_rois_per_image foreground RoIs
+    # minimum number between 128 and fg
     fg_rois_this_image = np.minimum(fg_rois_per_image, fg_indexes.size)
 
     if DEBUG:
         print('fg total num: {}'.format(len(fg_indexes)))
 
     # Sample foreground regions without replacement
+    # if fg number > 128, then random choose 128 fg from all fg.
     if len(fg_indexes) > fg_rois_this_image:
         fg_indexes = npr.choice(fg_indexes, size=fg_rois_this_image, replace=False)
 
@@ -184,9 +185,12 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     if DEBUG:
         print('bg total num: {}'.format(len(bg_indexes)))
     # Compute number of background RoIs to take from this image (guarding against there being fewer than desired)
+    # bg num = 512 - fg num
     bg_rois_this_image = rois_per_image - fg_rois_this_image
+    # minimum number between calculated bg number and actual bg number
     bg_rois_this_image = np.minimum(bg_rois_this_image, bg_indexes.size)
     # Sample foreground regions without replacement
+    # if actuall bg number > calculated bg number, randomly choose bg
     if len(bg_indexes) > bg_rois_this_image:
         bg_indexes = npr.choice(bg_indexes, size=bg_rois_this_image, replace=False)
     if DEBUG:
@@ -200,6 +204,8 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     neg_rois = rois[neg_idx]
 
     # pad more to ensure a fixed minibatch size
+    # if fg + bg is less than 512, means not enough training example, need to pad more
+    # pad negative rois, which are randomly chosen from rois whose overlaps less than FG Threshold.
     while keep_indexes.shape[0] < rois_per_image:
         gap = np.minimum(len(neg_rois), rois_per_image - keep_indexes.shape[0])
         gap_indexes = npr.choice(range(len(neg_rois)), size=gap, replace=False)
@@ -212,7 +218,8 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     # select fg rois
     rois = rois[keep_indexes]
 
-
+    # config.RCNN_FEAT_STRIDE = [32, 16, 8, 4]
+    # assign rois to different strides (level of feature maps)
     thresholds = [[np.inf, 448], [448, 224], [224, 112], [112, 0]]
     rois_area = np.sqrt((rois[:, 2] - rois[:, 0] + 1) * (rois[:, 3] - rois[:, 1] + 1))
     assign_levels = np.zeros(rois_per_image, dtype=np.uint8)
@@ -232,9 +239,13 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     rois_on_levels = dict()
     mask_rois_on_levels = None
     for i, s in enumerate(config.RCNN_FEAT_STRIDE):
+        # find the index of rois whose assigned level is s
         index = np.where(assign_levels == s)
+        # construct a zero array, shape is 512 * 4
         _rois = np.zeros(shape=(rois_per_image, 4), dtype=np.float32)
+        # only rois in this level s are assigned value
         _rois[index] = rois[index]
+        # same for mask, only rois in this level are assigned value 1
         _rois_mask = np.zeros(shape=(rois_per_image,), dtype=np.float32)
         _rois_mask[index[0]] = 1
         rois_on_levels.update({"stride%s" % s: _rois})
@@ -248,10 +259,15 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
         mask_targets = _mask_scatter(mask_targets, mask_labels, mask_inds, num_rois, num_classes)
         mask_targets = mask_targets[keep_indexes][:fg_rois_per_image]
     elif ins_ids is not None and ins_polys is not None:
-        # coco dataset
+        # COCO data set goes here ...
+
+        # instance ids are those kept fg rois.
         ins_ids = ins_ids[keep_indexes][:fg_rois_per_image]
+        # fill the mask target with -1. shape = (128 * num_class * 28 * 28)
         mask_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, num_classes, 28, 28), dtype=np.float32)
-        for i in range(fg_rois_this_image):
+
+        # for each fg roi, (real fg rois, since it may be less than 128)
+        for i in range(fg_rois_this_image):                                         # im_info[2] is image_scale
             mask_targets[i, labels[i]] = polys_to_mask_wrt_box(ins_polys[ins_ids[i]], rois[i] / im_info[2], 28)
         #polys_gt_inds = np.where((roidb['gt_classes'] > 0))[0]
         #polys_gt = [roidb['ins_poly'][i] for i in polys_gt_inds]

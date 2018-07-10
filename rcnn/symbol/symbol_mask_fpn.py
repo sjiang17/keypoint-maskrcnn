@@ -481,8 +481,8 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
             name="roi_mask", data=feat_lvl, rois=rois_lvl, pooled_size=(14, 14), spatial_scale=1.0 / stride)
         mask_roi_feats.append(mask_feat)
     # merge rois from different levels
-    # each mask_feat is 512 * 256 * 14 * 14 ????
-    # why add them element wise?
+    # each mask_feat is 512 * 256 * 14 * 14
+    # add them element wise
     mask_pool = mx.sym.add_n(*mask_roi_feats)
 
     ######################################################################
@@ -518,11 +518,11 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     ####################################################################
     num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
 
-    mask_pool = mask_pool.reshape(shape=(-1, config.TRAIN.BATCH_ROIS, 256, 14, 14))
-    mask_pool = mask_pool.slice_axis(axis=1, begin=0, end=num_fg_rois)
-    mask_pool = mask_pool.reshape(shape=(-1, 256, 14, 14))
+    # mask_pool = mask_pool.reshape(shape=(-1, config.TRAIN.BATCH_ROIS, 256, 14, 14))
+    # mask_pool = mask_pool.slice_axis(axis=1, begin=0, end=num_fg_rois)
+    # mask_pool = mask_pool.reshape(shape=(-1, 256, 14, 14))
 
-    # mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
+    mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
 
     mask_conv_1 = mx.sym.Convolution(data=mask_pool, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_1")
     mask_relu_1 = mx.sym.Activation(data=mask_conv_1, act_type="relu", name="mask_relu_1")

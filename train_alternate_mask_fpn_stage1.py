@@ -35,8 +35,7 @@ def alternate_train(args, ctx, pretrained, epoch,
     image_sets = [iset for iset in args.image_set.split('+')]
     for image_set in image_sets:
         test_rpn(args.network, args.dataset, image_set, args.root_path, args.dataset_path,
-                 ctx, model_path + '/rpn1', rpn_epoch, vis=False, shuffle=False, thresh=0)
-
+                 ctx, model_path + '/rpn2', rpn_epoch, vis=False, shuffle=False, thresh=0)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train Faster R-CNN Network')

@@ -96,12 +96,15 @@ def polys_to_mask_wrt_box(polygons, box, M):
     is understood to be enclosed in the given box and rasterized to an M x M
     mask. The resulting mask is therefore of shape (M, M).
     """
+    # get the width and height of this roi.
+    # absolute value, minimum set to 1.
     w = box[2] - box[0]
     h = box[3] - box[1]
 
     w = np.maximum(w, 1)
     h = np.maximum(h, 1)
 
+    # get the nomalized polygon coordinates wrt. current roi and M.
     polygons_norm = []
     for poly in polygons:
         p = np.array(poly, dtype=np.float32)

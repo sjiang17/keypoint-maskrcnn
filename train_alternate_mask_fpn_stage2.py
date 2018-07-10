@@ -14,16 +14,16 @@ def alternate_train(args, ctx, pretrained, epoch,
                     rcnn_epoch, rcnn_lr, rcnn_lr_step):
     # set up logger
     # logging.basicConfig(filename="mask_rcnn_alternate_train_%d.log" % int(time.time()))
-    logging.basicConfig()
+    head = '%(asctime)-15s %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=head)
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
     # basic config
-    begin_epoch = 3
+    begin_epoch = 0
     config.TRAIN.BG_THRESH_LO = 0.0
 
     # model path
     model_path = args.prefix
-    args.resume = True
+    # args.resume = True
     logging.info('########## TRAIN RCNN WITH IMAGENET INIT AND RPN DETECTION')
     train_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path,
                    args.frequent, args.kvstore, args.work_load_list, args.no_flip, args.no_shuffle, args.resume,
@@ -70,9 +70,9 @@ def main():
     # args.network = 'resnet_fpn'
     # args.dataset = 'coco'
     # args.image_set = 'train2017'
-    # args.root_path =  'model/res50-fpn/coco/alternate_coco_4gpu/'
+    # args.root_path =  'model/res50-fpn/coco/debug/'
     # args.pretrained = 'model/resnet-50'
-    # args.prefix = 'model/res50-fpn/coco/alternate_coco_4gpu/'
+    # args.prefix = 'model/res50-fpn/coco/debug/'
     # args.pretrained_epoch = 0
     # args.gpus = '0'
     print 'Called with argument:', args

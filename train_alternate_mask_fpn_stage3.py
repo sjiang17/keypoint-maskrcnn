@@ -14,9 +14,9 @@ def alternate_train(args, ctx, pretrained, epoch,
                     rcnn_epoch, rcnn_lr, rcnn_lr_step):
     # set up logger
     # logging.basicConfig(filename="mask_rcnn_alternate_train_%d.log" % int(time.time()))
-    logging.basicConfig()
+    head = '%(asctime)-15s %(message)s'
+    logging.basicConfig(level=logging.DEBUG, format=head)
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
     # basic config
     begin_epoch = 0
     config.TRAIN.BG_THRESH_LO = 0.0

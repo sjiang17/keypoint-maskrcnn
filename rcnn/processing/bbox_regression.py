@@ -348,13 +348,16 @@ def expand_bbox_regression_targets(bbox_targets_data, num_classes):
     bbox_weights ! only foreground boxes have bbox regression computation!
     """
     classes = bbox_targets_data[:, 0]
+    # (num_rois, 4 * num_classes)
     bbox_targets = np.zeros((classes.size, 4 * num_classes), dtype=np.float32)
     bbox_weights = np.zeros(bbox_targets.shape, dtype=np.float32)
+    # find all indexes where class is not background
     indexes = np.where(classes > 0)[0]
     for index in indexes:
         cls = classes[index]
         start = int(4 * cls)
         end = start + 4
         bbox_targets[index, start:end] = bbox_targets_data[index, 1:]
+        # each roi has 4*num_classes box targets, but only the gt class will have regression target value
         bbox_weights[index, start:end] = config.TRAIN.BBOX_WEIGHTS
     return bbox_targets, bbox_weights
