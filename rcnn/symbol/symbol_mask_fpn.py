@@ -446,7 +446,8 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     label       = mx.sym.var("label").reshape(shape=(-1, ))
     bbox_target = mx.sym.var("bbox_target").reshape(shape=(-1, 4 * num_classes))
     bbox_weight = mx.sym.var("bbox_weight").reshape(shape=(-1, 4 * num_classes))
-    mask_target = mx.sym.var("mask_target").reshape(shape=(-1, num_classes, 28, 28))
+    # mask_target = mx.sym.var("mask_target").reshape(shape=(-1, num_classes, 28, 28))
+    keypoint_target = mx.sym.var("keypoint_target").reshape(shape=(-1,))
     rois = dict()
     for s in rcnn_feat_stride:
         rois["stride%s" % s] = mx.sym.var("rois_stride%s" % s).reshape(shape=(-1, 5))
@@ -505,54 +506,108 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
 
     rcnn_group = [cls_prob, bbox_loss]
 
-    ###################################################################
-    # debug branch
-    ###################################################################
-    rois_add_n = mx.sym.add_n(*rois.values())
-    bug = mx.sym.Custom(op_type="Debug", num_args=4, data=data, data1=rois_add_n, data2=mask_target, data3=label,
-                        pos="demo_rcnn_proposal")
-    bug = mx.sym.MakeLoss(bug)
+    # ###################################################################
+    # # debug branch
+    # ###################################################################
+    # rois_add_n = mx.sym.add_n(*rois.values())
+    # bug = mx.sym.Custom(op_type="Debug", num_args=4, data=data, data1=rois_add_n, data2=mask_target, data3=label,
+    #                     pos="demo_rcnn_proposal")
+    # bug = mx.sym.MakeLoss(bug)
 
-    ####################################################################
-    # mask branch
-    ####################################################################
-    num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
+    # ###################################################################
+    # # mask branch
+    # ###################################################################
+    # num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
 
     # mask_pool = mask_pool.reshape(shape=(-1, config.TRAIN.BATCH_ROIS, 256, 14, 14))
     # mask_pool = mask_pool.slice_axis(axis=1, begin=0, end=num_fg_rois)
     # mask_pool = mask_pool.reshape(shape=(-1, 256, 14, 14))
 
-    mask_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
-
-    mask_conv_1 = mx.sym.Convolution(data=mask_pool, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_1")
-    mask_relu_1 = mx.sym.Activation(data=mask_conv_1, act_type="relu", name="mask_relu_1")
-
-    mask_conv_2 = mx.sym.Convolution(data=mask_relu_1, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_2")
-    mask_relu_2 = mx.sym.Activation(data=mask_conv_2, act_type="relu", name="mask_relu_2")
-
-    mask_conv_3 = mx.sym.Convolution(data=mask_relu_2, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_3")
-    mask_relu_3 = mx.sym.Activation(data=mask_conv_3, act_type="relu", name="mask_relu_3")
-
-    mask_conv_4 = mx.sym.Convolution(data=mask_relu_3, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_4")
-    mask_relu_4 = mx.sym.Activation(data=mask_conv_4, act_type="relu", name="mask_relu_4")
-
-    mask_deconv_1 = mx.sym.Deconvolution(data=mask_relu_4, kernel=(2, 2), stride=(2, 2), num_filter=256,
-                                         name="mask_deconv_1")
-    mask_relu_5 = mx.sym.Activation(data=mask_deconv_1, act_type="relu", name="mask_relu_5")
-
-    mask_deconv_2 = mx.sym.Convolution(data=mask_relu_5, kernel=(1, 1), num_filter=num_classes, name="mask_deconv_2")
-
-    mask_deconv_2 = mask_deconv_2.reshape((1, -1))
-    mask_target = mask_target.reshape((1, -1))
-    mask_loss = mx.sym.contrib.SigmoidCrossEntropy(data=mask_deconv_2, label=mask_target,
-                                                    grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
+    # mask_pool_instance = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
+    #
+    # mask_conv_1 = mx.sym.Convolution(data=mask_pool_instance, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_1")
+    # mask_relu_1 = mx.sym.Activation(data=mask_conv_1, act_type="relu", name="mask_relu_1")
+    #
+    # mask_conv_2 = mx.sym.Convolution(data=mask_relu_1, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_2")
+    # mask_relu_2 = mx.sym.Activation(data=mask_conv_2, act_type="relu", name="mask_relu_2")
+    #
+    # mask_conv_3 = mx.sym.Convolution(data=mask_relu_2, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_3")
+    # mask_relu_3 = mx.sym.Activation(data=mask_conv_3, act_type="relu", name="mask_relu_3")
+    #
+    # mask_conv_4 = mx.sym.Convolution(data=mask_relu_3, kernel=(3, 3), pad=(1, 1), num_filter=256, name="mask_conv_4")
+    # mask_relu_4 = mx.sym.Activation(data=mask_conv_4, act_type="relu", name="mask_relu_4")
+    #
+    # mask_deconv_1 = mx.sym.Deconvolution(data=mask_relu_4, kernel=(2, 2), stride=(2, 2), num_filter=256,
+    #                                      name="mask_deconv_1")
+    # mask_relu_5 = mx.sym.Activation(data=mask_deconv_1, act_type="relu", name="mask_relu_5")
+    #
+    # mask_deconv_2 = mx.sym.Convolution(data=mask_relu_5, kernel=(1, 1), num_filter=num_classes, name="mask_deconv_2")
+    #
+    # mask_deconv_2 = mask_deconv_2.reshape((1, -1))
+    # mask_target = mask_target.reshape((1, -1))
+    # mask_loss = mx.sym.contrib.SigmoidCrossEntropy(data=mask_deconv_2, label=mask_target,
+    #                                                 grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
 
     # mask_loss = mx.sym.MultiLogistic(data=mask_deconv_2, label=mask_target,
     #                                               grad_scale=cfg.MASKRCNN.MASK_LOSS, name="mask_output")
 
-    mask_group = [mask_loss]
+    # mask_group = [mask_loss]
 
-    return mx.sym.Group(rcnn_group + mask_group)
+    ####################################################################
+    # keypoint branch
+    ####################################################################
+    # num_fg_rois = int(config.KEYPOINT.fg_num)
+    num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
+    keypoint_pool = mask_pool.slice_axis(axis=0, begin=0, end=num_fg_rois)
+
+    kp_conv_1 = mx.sym.Convolution(data=keypoint_pool, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_1")
+    kp_relu_1 = mx.sym.Activation(data=kp_conv_1, act_type="relu", name="kp_relu_1")
+
+    kp_conv_2 = mx.sym.Convolution(data=kp_relu_1, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_2")
+    kp_relu_2 = mx.sym.Activation(data=kp_conv_2, act_type="relu", name="kp_relu_2")
+
+    kp_conv_3 = mx.sym.Convolution(data=kp_relu_2, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_3")
+    kp_relu_3 = mx.sym.Activation(data=kp_conv_3, act_type="relu", name="kp_relu_3")
+
+    kp_conv_4 = mx.sym.Convolution(data=kp_relu_3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_4")
+    kp_relu_4 = mx.sym.Activation(data=kp_conv_4, act_type="relu", name="kp_relu_4")
+
+    kp_conv_5 = mx.sym.Convolution(data=kp_relu_4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_5")
+    kp_relu_5 = mx.sym.Activation(data=kp_conv_5, act_type="relu", name="kp_relu_5")
+
+    kp_conv_6 = mx.sym.Convolution(data=kp_relu_5, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_6")
+    kp_relu_6 = mx.sym.Activation(data=kp_conv_6, act_type="relu", name="kp_relu_6")
+
+    kp_conv_7 = mx.sym.Convolution(data=kp_relu_6, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_7")
+    kp_relu_7 = mx.sym.Activation(data=kp_conv_7, act_type="relu", name="kp_relu_7")
+
+    kp_conv_8 = mx.sym.Convolution(data=kp_relu_7, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_8")
+    kp_relu_8 = mx.sym.Activation(data=kp_conv_8, act_type="relu", name="kp_relu_8")
+
+    # kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(4, 4), stride=(2, 2), num_filter=17, name="kp_deconv_1",
+    #                                    target_shape=(28, 28))
+    # kp_upsample = mx.sym.UpSampling(data=kp_deconv_1, scale=2, num_filter=17, sample_type='bilinear', name='kp_upsample')
+    #
+    # kp_prob = kp_upsample.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE), name='keypoint_prob')
+
+    kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(2, 2), stride=(2, 2), num_filter=512,
+                                         name="kp_deconv_1")
+    kp_relu_9 = mx.sym.Activation(data=kp_deconv_1, act_type="relu", name="kp_relu_9")
+
+    kp_upsample = mx.sym.UpSampling(data=kp_relu_9, scale=2, num_filter=512, sample_type='bilinear', name='kp_upsample')
+
+    kp_deconv_2 = mx.sym.Convolution(data=kp_upsample, kernel=(1, 1), num_filter=17, name="kp_deconv_2")
+
+    kp_deconv_2 = kp_deconv_2.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE))
+
+    keypoint_target = keypoint_target.reshape((num_fg_rois*17,))
+
+    kp_loss = mx.sym.SoftmaxOutput(data=kp_deconv_2, label=keypoint_target, multi_output=True, use_ignore=True,
+                                   ignore_label=-1, name='kp_output', normalization='valid')
+    kp_group = [kp_loss]
+
+    return mx.sym.Group(rcnn_group + kp_group)
+
 
 if __name__ == '__main__':
     rcnn.config.generate_config('resnet_fpn', 'coco')
@@ -562,11 +617,12 @@ if __name__ == '__main__':
         'bbox_weight': (1L, 512L, 8L),
         'data': (1L, 3L, 800L, 1333L),
         'label': (1L, 512L),
-        'mask_target': (1L, 64L, 2L, 28L, 28L),
+        'mask_target': (1L, 128L, 2L, 28L, 28L),
         'rois_stride16': (1L, 512L, 5L),
         'rois_stride32': (1L, 512L, 5L),
         'rois_stride4': (1L, 512L, 5L),
-        'rois_stride8': (1L, 512L, 5L)
+        'rois_stride8': (1L, 512L, 5L),
+        'keypoint_target': (1L, 128L, 17L, 1L)
     }
 
     arg_shape, out_shape, aux_shape = sym.infer_shape(**shape_dict)

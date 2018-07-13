@@ -114,14 +114,15 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('label', (input_batch_size, config.TRAIN.BATCH_ROIS)))
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
-    max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
+    # max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
     # max_label_shape.append(('mask_target', (input_batch_size,config.TRAIN.BATCH_ROIS, config.NUM_CLASSES, 28, 28)))
+    max_label_shape.append(('keypoint_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, 1)))
 
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
     print('input shape')
     pprint.pprint(data_shape_dict)
-    # data_shape_dict['mask_target'] = (1L, 128L, 2L, 28L, 28L)
+    data_shape_dict['keypoint_target'] = (1L, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17L)
     arg_shape, out_shape, aux_shape = sym.infer_shape(**data_shape_dict)
     arg_shape_dict = dict(zip(sym.list_arguments(), arg_shape))
     out_shape_dict = zip(sym.list_outputs(), out_shape)
@@ -132,6 +133,29 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     # load or initialize params
     if resume:
         arg_params, aux_params = load_param(prefix, begin_epoch, convert=True)
+        normal0001 = mx.init.Normal(sigma=0.001)
+        normal001 = mx.init.Normal(sigma=0.01)
+        msra = mx.init.Xavier(factor_type="in", rnd_type='gaussian', magnitude=2)
+        xavier = mx.init.Xavier(factor_type="in", rnd_type="uniform", magnitude=3)
+        for k in sym.list_arguments():
+            if k in data_shape_dict:
+                continue
+            if k not in arg_params:
+                arg_params[k] = mx.nd.empty(shape=arg_shape_dict[k])
+                if k.endswith('bias'):
+                    print('init %s with zero' % k)
+                    arg_params[k] = mx.nd.zeros(shape=arg_shape_dict[k])
+                elif k in ['kp_deconv_1_weight', 'kp_deconv_2_weight']:
+                    print('init %s with normal(0.001)' % k)
+                    normal0001(k, arg_params[k])
+                elif 'P' in k:
+                    print('init %s with xavier' % k)
+                    xavier(k, arg_params[k])
+                elif k.endswith('weight'):
+                    print('init %s with msra' % k)
+                    msra(k, arg_params[k])
+                else:
+                    raise KeyError("unknown parameter tpye %s" % k)
     else:
         print('pretrained', pretrained)
         arg_params, aux_params = load_param(pretrained, epoch, convert=True)
@@ -151,7 +175,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                 if k.endswith('bias'):
                     print('init %s with zero' % k)
                     arg_params[k] = mx.nd.zeros(shape=arg_shape_dict[k])
-                elif k in ['rcnn_fc_bbox_weight', 'mask_deconv_2_weight']:
+                elif k in ['rcnn_fc_bbox_weight', 'kp_deconv_2_weight']:
                     print('init %s with normal(0.001)' % k)
                     normal0001(k, arg_params[k])
                 elif k in ['rcnn_fc_cls_weight']:
@@ -169,7 +193,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                 else:
                     raise KeyError("unknown parameter tpye %s" % k)
 
-        print('sym.list_auxiliary_states()', sym.list_auxiliary_states())
+        # print('sym.list_auxiliary_states()', sym.list_auxiliary_states())
         for k in sym.list_auxiliary_states():
             if k not in aux_params:
                 print('init %s' % k)
@@ -196,10 +220,11 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     label_names = [k[0] for k in train_data.provide_label]
     print('data_names', data_names)
     print('label_names', label_names)
-    if train_shared:
-        fixed_param_prefix = config.FIXED_PARAMS_SHARED
-    else:
-        fixed_param_prefix = config.FIXED_PARAMS
+    # if train_shared:
+    #     fixed_param_prefix = config.FIXED_PARAMS_SHARED
+    # else:
+    #     fixed_param_prefix = config.FIXED_PARAMS
+    fixed_param_prefix = ['conv0', 'stage1', 'rcnn']
     mod = MutableModule(sym, data_names=data_names, label_names=label_names,
                         logger=logger, context=ctx, work_load_list=work_load_list,
                         max_data_shapes=max_data_shape, max_label_shapes=max_label_shape,
@@ -210,14 +235,15 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     eval_metric = metric.RCNNAccMetric()
     cls_metric = metric.RCNNLogLossMetric()
     bbox_metric = metric.RCNNRegLossMetric()
-    mask_acc_metric = metric.MaskAccMetric()
-    mask_log_metric = metric.MaskLogLossMetric()
-    mask_log_loss = mx.metric.Loss(output_names=["mask_output_output"])
+    # mask_acc_metric = metric.MaskAccMetric()
+    # mask_log_metric = metric.MaskLogLossMetric()
+    # mask_log_loss = mx.metric.Loss(output_names=["mask_output_output"])
     eval_metrics = mx.metric.CompositeEvalMetric()
+    kp_log_loss = metric.KeypointLossMetric()
 
     simple_metric = True
     if simple_metric:
-        for child_metric in [eval_metric, cls_metric, bbox_metric, mask_log_loss]:
+        for child_metric in [eval_metric, cls_metric, bbox_metric, kp_log_loss]:
             eval_metrics.add(child_metric)
     else:
         for child_metric in [eval_metric, cls_metric, bbox_metric, mask_acc_metric, mask_log_metric]:
@@ -234,7 +260,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     lr = base_lr * (lr_factor ** (len(lr_epoch) - len(lr_epoch_diff)))
     lr_iters = [int(epoch * len(roidb) / batch_size) for epoch in lr_epoch_diff]
     print('lr', lr, 'lr_epoch_diff', lr_epoch_diff, 'lr_iters', lr_iters)
-    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=500)
+    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=1)
     # optimizer
     optimizer_params = {'momentum': 0.9,
                         'wd': 0.0001,
@@ -247,7 +273,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     mod.fit(train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
             batch_end_callback=batch_end_callback, kvstore=kvstore,
             optimizer='sgd', optimizer_params=optimizer_params,
-            arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
+            arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=1000)
 
     # from mxnet.initializer import Uniform
     # from mxnet.model import BatchEndParam
@@ -256,7 +282,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     # import time
     # import cPickle
     # import os
-
+    #
     # def myfit(mod, train_data, eval_data=None, eval_metric='acc',
     #         epoch_end_callback=None, batch_end_callback=None, kvstore='local',
     #         optimizer='sgd', optimizer_params=(('learning_rate', 0.01),),
@@ -289,24 +315,26 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     #         data_iter = iter(train_data)
     #         end_of_batch = False
     #         next_data_batch = next(data_iter)
+    #         cnt = 0
     #         while not end_of_batch:
     #             data_batch = next_data_batch
     #             print('----------DEBUG---------')
-    #             debug_save_dir = 'debug/'
-    #             cPickle.dump(data_batch.data, open(os.path.join(debug_save_dir, 'data2.pkl'), 'w'))
-    #             cPickle.dump(data_batch.label, open(os.path.join(debug_save_dir, 'label2.pkl'), 'w'))
+    #             debug_save_dir = 'debug/save2/'
+    #             cPickle.dump(data_batch.data, open(os.path.join(debug_save_dir, 'data{}.pkl'.format(cnt)), 'w'))
+    #             cPickle.dump(data_batch.label, open(os.path.join(debug_save_dir, 'label{}.pkl'.format(cnt)), 'w'))
     #
-    #             print(type(data_batch.data))
-    #             print(type(data_batch.data))
-    #             print((data_batch.data[0]))
-    #             print((data_batch.data[0].shape))
-    #
-    #             print((data_batch.data[1].shape))
-    #             print((data_batch.data[2].shape))
-    #             print((data_batch.data[3].shape))
-    #             print((data_batch.data[4].shape))
-    #
-    #             exit()
+    #             # print(type(data_batch.data))
+    #             # print(len(data_batch.label))
+    #             # print((data_batch.data[0]))
+    #             # print((data_batch.data[0].shape))
+    #             # print((data_batch.data[1].shape))
+    #             # print((data_batch.data[2].shape))
+    #             # print((data_batch.data[3].shape))
+    #             # print((data_batch.data[4].shape))
+    #             cnt += 1
+    #             if cnt == 20:
+    #                 exit()
+    #             # exit()
     #
     #             mod.forward_backward(data_batch)
     #             mod.update()

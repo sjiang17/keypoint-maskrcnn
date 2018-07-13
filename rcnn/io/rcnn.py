@@ -19,7 +19,8 @@ import numpy.random as npr
 
 from ..config import config
 from ..config import config as cfg
-from ..core.segms import polys_to_mask_wrt_box
+# from ..core.segms import polys_to_mask_wrt_box
+from ..core.keypoint_utils import keypoints_to_vec_wrt_box
 from ..core.helper import get_scale_factor
 from ..io.image import get_image, get_image_and_mask, tensor_vstack
 from ..processing.bbox_transform import bbox_overlaps, nonlinear_transform
@@ -67,36 +68,41 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
     label_list = list()
     bbox_target_list = list()
     bbox_weight_list = list()
-    mask_target_list = list()
+    # mask_target_list = list()
     consist_target_list = list()
+    keypoint_target_list = list()
 
-    batch_size = len(roidb)
+    batch_size = len(roidb)  # batch_size = 1 for 1 gpu
     num_classes = config.NUM_CLASSES
     for i in range(batch_size):
         roi_rec = roidb[i]
         # label = class RoI has max overlap with
-        rois = roi_rec['boxes']
+        rois = roi_rec['boxes'] # (2001,4)
         labels = roi_rec['max_classes']
         overlaps = roi_rec['max_overlaps']
         bbox_targets = roi_rec['bbox_targets']
-        im_info = roi_rec['im_info']
+        im_info = roi_rec['im_info'] # [height, width, scale] [800, 1199, 1.87]
+        kp_ids = roi_rec['kp_id']  # shape = (2001,)
+        # print(kp_ids)
+        keypoints = roi_rec['keypoints']
+        # print(keypoints)
 
-        if 'ins_poly' in roi_rec:
-            # coco style
-            ins_ids = roi_rec['ins_id']
-            ins_polys = roi_rec['ins_poly']
-            mask_targets = None
-            mask_labels = None
-            mask_inds = None
-        else:
-            # cityscape style
-            ins_ids = None
-            ins_polys = None
-            mask_targets = roi_rec['mask_targets']
-            mask_labels = roi_rec['mask_labels']
-            mask_inds = roi_rec['mask_inds']
+        # if 'ins_poly' in roi_rec:
+        #     # coco style
+        #     ins_ids = roi_rec['ins_id']
+        #     ins_polys = roi_rec['ins_poly']
+        #     mask_targets = None
+        #     mask_labels = None
+        #     mask_inds = None
+        # else:
+        #     # cityscape style
+        #     ins_ids = None
+        #     ins_polys = None
+        #     mask_targets = roi_rec['mask_targets']
+        #     mask_labels = roi_rec['mask_labels']
+        #     mask_inds = roi_rec['mask_inds']
 
-        rois_on_lvls, labels, bbox_targets, bbox_weights, mask_targets = \
+        rois_on_lvls, labels, bbox_targets, bbox_weights, keypoint_targets = \
             sample_rois_fpn(
                             roidb[i],
                             rois,
@@ -106,12 +112,15 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
                             labels,
                             overlaps,
                             bbox_targets,
-                            mask_targets=mask_targets,
-                            mask_labels=mask_labels,
-                            mask_inds=mask_inds,
-                            ins_ids=ins_ids,
-                            ins_polys=ins_polys,
-                            im_info=im_info)
+                            # mask_targets=mask_targets,
+                            # mask_labels=mask_labels,
+                            # mask_inds=mask_inds,
+                            # ins_ids=ins_ids,
+                            # ins_polys=ins_polys,
+                            im_info=im_info,
+                            kp_ids = kp_ids,
+                            keypoints = keypoints
+                            )
         #print (mask_targets.shape)
         #np.save("mask_targets", mask_targets)
 
@@ -125,7 +134,8 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
         label_list.append(np.expand_dims(labels, axis=0))
         bbox_target_list.append(np.expand_dims(bbox_targets, axis=0))
         bbox_weight_list.append(np.expand_dims(bbox_weights, axis=0))
-        mask_target_list.append(np.expand_dims(mask_targets, axis=0))
+        # mask_target_list.append(np.expand_dims(mask_targets, axis=0))
+        keypoint_target_list.append(np.expand_dims(keypoint_targets, axis=0))
 
 
 
@@ -136,16 +146,16 @@ def get_fpn_maskrcnn_batch(roidb, max_shape):
     label_dict = {"label": np.concatenate(label_list),
                   "bbox_target": np.concatenate(bbox_target_list),
                   "bbox_weight": np.concatenate(bbox_weight_list),
-                  "mask_target": np.concatenate(mask_target_list)}
-
-
+                  # "mask_target": np.concatenate(mask_target_list),
+                  "keypoint_target": np.concatenate(keypoint_target_list)
+                  }
 
     return data_dict, label_dict
 
 
 def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes, labels=None, overlaps=None,
-                    bbox_targets=None, mask_targets=None, mask_labels=None, mask_inds=None, ins_ids=None,
-                    ins_polys=None, im_info=None, consist_targets=None, consist_labels=None, consist_inds=None):
+                    bbox_targets=None, im_info=None, consist_targets=None, consist_labels=None, consist_inds=None,
+                    kp_ids = None, keypoints = None):
     """
     generate random sample of ROIs comprising foreground and background examples
     :param roidb: roidb extended format [image_index]
@@ -254,21 +264,21 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     bbox_target_data = bbox_targets[keep_indexes, :]
     bbox_targets, bbox_weights = expand_bbox_regression_targets(bbox_target_data, num_classes)
 
-    # load mask target
-    if mask_targets is not None and mask_labels is not None and mask_inds is not None:
-        mask_targets = _mask_scatter(mask_targets, mask_labels, mask_inds, num_rois, num_classes)
-        mask_targets = mask_targets[keep_indexes][:fg_rois_per_image]
-    elif ins_ids is not None and ins_polys is not None:
-        # COCO data set goes here ...
-
-        # instance ids are those kept fg rois.
-        ins_ids = ins_ids[keep_indexes][:fg_rois_per_image]
-        # fill the mask target with -1. shape = (128 * num_class * 28 * 28)
-        mask_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, num_classes, 28, 28), dtype=np.float32)
-
-        # for each fg roi, (real fg rois, since it may be less than 128)
-        for i in range(fg_rois_this_image):                                         # im_info[2] is image_scale
-            mask_targets[i, labels[i]] = polys_to_mask_wrt_box(ins_polys[ins_ids[i]], rois[i] / im_info[2], 28)
+    # # load mask target
+    # if mask_targets is not None and mask_labels is not None and mask_inds is not None:
+    #     mask_targets = _mask_scatter(mask_targets, mask_labels, mask_inds, num_rois, num_classes)
+    #     mask_targets = mask_targets[keep_indexes][:fg_rois_per_image]
+    # elif ins_ids is not None and ins_polys is not None:
+    #     # COCO data set goes here ...
+    #
+    #     # instance ids are those kept fg rois.
+    #     ins_ids = ins_ids[keep_indexes][:fg_rois_per_image]
+    #     # fill the mask target with -1. shape = (128 * num_class * 28 * 28)
+    #     mask_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, num_classes, 28, 28), dtype=np.float32)
+    #
+    #     # for each fg roi, (real fg rois, since it may be less than 128)
+    #     for i in range(fg_rois_this_image):                                         # im_info[2] is image_scale
+    #         mask_targets[i, labels[i]] = polys_to_mask_wrt_box(ins_polys[ins_ids[i]], rois[i] / im_info[2], 28)
         #polys_gt_inds = np.where((roidb['gt_classes'] > 0))[0]
         #polys_gt = [roidb['ins_poly'][i] for i in polys_gt_inds]
         #boxes_from_polys = polys_to_boxes(polys_gt)
@@ -313,13 +323,19 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
         #    #masks[i, :] = np.reshape(mask, M**2)
         #    mask_targets[i, labels[i]] = np.reshape(mask, (28,28))
 
+    kp_ids_new = kp_ids[keep_indexes][:fg_rois_per_image]
+    keypoint_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, 17), dtype=np.int32)
+    for i in range(len(kp_ids_new)):
+        keypoint_targets[i] = keypoints_to_vec_wrt_box(keypoints[kp_ids_new[i]], rois[i] / im_info[2], config.KEYPOINT.MAPSIZE)
 
-    if mask_targets is not None:
-        # print("&&&&&&&&&&&&&& mask_targets shape:", mask_targets.shape)
-        # print("&&&&&&&&&&&&&& num_classes:", num_classes)
-        return rois_on_levels, labels, bbox_targets, bbox_weights, mask_targets
-    else:
-        return rois_on_levels, labels, bbox_targets, bbox_weights
+    # if mask_targets is not None:
+    #     # print("&&&&&&&&&&&&&& mask_targets shape:", mask_targets.shape)
+    #     # print("&&&&&&&&&&&&&& num_classes:", num_classes)
+    #     return rois_on_levels, labels, bbox_targets, bbox_weights, mask_targets, keypoint_targets
+    # else:
+    #     return rois_on_levels, labels, bbox_targets, bbox_weights
+    # print(keypoint_targets[:20,:])
+    return rois_on_levels, labels, bbox_targets, bbox_weights, keypoint_targets
 
 
 def _mask_scatter(mask_targets, mask_labels, mask_inds, num_rois, num_classes):

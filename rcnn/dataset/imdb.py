@@ -296,6 +296,7 @@ class IMDB(object):
             a[i]['gt_classes'] = np.hstack((a[i]['gt_classes'], b[i]['gt_classes']))
             a[i]['max_classes'] = np.hstack((a[i]['max_classes'], b[i]['max_classes']))
             a[i]['max_overlaps'] = np.hstack((a[i]['max_overlaps'], b[i]['max_overlaps']))
-            if 'ins_id' in a[i]:
-                a[i]['ins_id'] = np.hstack((a[i]['ins_id'], b[i]['ins_id']))
+            # if 'ins_id' in a[i]:
+            #     a[i]['ins_id'] = np.hstack((a[i]['ins_id'], b[i]['ins_id']))
+            a[i]['kp_id'] = np.hstack((a[i]['kp_id'], b[i]['kp_id']))
         return a

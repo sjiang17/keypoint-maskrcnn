@@ -3,7 +3,7 @@ import logging
 
 import mxnet as mx
 import sys
-sys.path.append('/mnt/truenas/scratch/siyu/maskrcnn')
+sys.path.append('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
 import rcnn
 from rcnn.config import config, default, generate_config
 from rcnn.tools.train_maskrcnn import train_maskrcnn
@@ -23,8 +23,9 @@ def alternate_train(args, ctx, pretrained, epoch,
 
     # model path
     model_path = args.prefix
-    # args.resume = True
+    args.resume = True
     logging.info('########## TRAIN RCNN WITH IMAGENET INIT AND RPN DETECTION')
+    args.no_flip = True
     train_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path,
                    args.frequent, args.kvstore, args.work_load_list, args.no_flip, args.no_shuffle, args.resume,
                    ctx, pretrained, epoch, model_path + '/rcnn1', begin_epoch, rcnn_epoch,
@@ -69,7 +70,7 @@ def main():
     args = parse_args()
     # args.network = 'resnet_fpn'
     # args.dataset = 'coco'
-    # args.image_set = 'train2017'
+    # args.image_set = 'minitrain2017'
     # args.root_path =  'model/res50-fpn/coco/debug/'
     # args.pretrained = 'model/resnet-50'
     # args.prefix = 'model/res50-fpn/coco/debug/'
@@ -84,5 +85,5 @@ def main():
 
 if __name__ == '__main__':
     # import os
-    # os.chdir('/mnt/truenas/scratch/siyu/maskrcnn')
+    # os.chdir('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
     main()

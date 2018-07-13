@@ -50,7 +50,7 @@ class ThreadedMaskROIIter(mx.io.DataIter):
             self.data_name.append('rois_stride%s' % s)
             if cfg.MASKFCN.ON:
                 self.data_name.append('mask_rois_stride%s' % s)
-        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'mask_target']
+        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'keypoint_target']
         if cfg.MASKFCN.PAN:
             self.label_name.append("semantic_label")
         if cfg.MASKFCN.CONSISTENT:
@@ -189,7 +189,7 @@ class ThreadedAspectMaskROIIter(mx.io.DataIter):
         self.data_name = ['data']
         for s in config.RCNN_FEAT_STRIDE:
             self.data_name.append('rois_stride%s' % s)
-        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'mask_target']
+        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'keypoint_target']
 
         # status variable for synchronization between get_data and get_label
         self.horizontal_cur = 0

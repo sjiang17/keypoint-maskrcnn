@@ -6,19 +6,18 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/alternate_4gpu_recompile/
+TRAIN_DIR=model/res50-fpn/coco/sample/
 DATASET=coco
-SET=train2017
+SET=sample2017
 #TEST_SET=minival2014
 mkdir -p ${TRAIN_DIR}
 
 # Train
 echo "current workspace: $(pwd)"
 
-GPU=0,1,2,3,4,5,6,7
-#GPU=0
+GPU=0
 
-## Train
+# Train
 #python train_alternate_mask_fpn_stage1.py \
 #    --network resnet_fpn \
 #    --dataset ${DATASET} \
@@ -28,15 +27,15 @@ GPU=0,1,2,3,4,5,6,7
 #    --prefix ${TRAIN_DIR} \
 #    --pretrained_epoch 0 \
 #    --gpu $GPU && \
-#python train_alternate_mask_fpn_stage2.py \
-#   --network resnet_fpn \
-#   --dataset ${DATASET} \
-#   --image_set ${SET} \
-#   --root_path ${TRAIN_DIR} \
-#   --pretrained model/resnet-50 \
-#   --prefix ${TRAIN_DIR} \
-#   --pretrained_epoch 0 \
-#   --gpu $GPU && \
+python train_alternate_mask_fpn_stage2.py \
+   --network resnet_fpn \
+   --dataset ${DATASET} \
+   --image_set ${SET} \
+   --root_path ${TRAIN_DIR} \
+   --pretrained model/resnet-50 \
+   --prefix ${TRAIN_DIR} \
+   --pretrained_epoch 0 \
+   --gpu $GPU && \
 python train_alternate_mask_fpn_stage3.py \
    --network resnet_fpn \
    --dataset ${DATASET} \

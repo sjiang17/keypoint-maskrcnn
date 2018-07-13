@@ -133,7 +133,7 @@ default = edict()
 default.network = 'resnet_fpn'
 default.pretrained = 'model/resnet-50'
 default.pretrained_epoch = 0
-default.base_lr = 0.01
+default.base_lr = 0.001
 # default dataset
 default.dataset = 'Cityscape'
 default.image_set = 'train'
@@ -207,13 +207,17 @@ dataset.coco.NUM_ANCHORS = len(dataset.Cityscape.ANCHOR_SCALES) * len(dataset.Ci
 dataset.coco.CLASS_ID = [0, 1]
 dataset.coco.CLASS_NAME = ('__background__', 'person')
 dataset.coco.SEG_CODE = 500
-dataset.coco.BATCH_ROIS = 512
+dataset.coco.BATCH_ROIS = 256
 dataset.coco.ASPECT_GROUPING = True
 dataset.coco.SCALE = False
 dataset.coco.rpn_epoch = 6
 dataset.coco.rpn_lr_step = '3,5'
 dataset.coco.rcnn_epoch = 12
-dataset.coco.rcnn_lr_step = '6,8'
+dataset.coco.rcnn_lr_step = '10000,20000'
+
+config.KEYPOINT = edict()
+config.KEYPOINT.MAPSIZE = 56
+# config.KEYPOINT.fg_num = 64
 
 
 def generate_config(_network, _dataset):

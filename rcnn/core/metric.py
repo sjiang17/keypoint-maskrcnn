@@ -23,8 +23,8 @@ def get_rcnn_fpn_names():
 
 def get_maskrcnn_fpn_name():
     rcnn_pred, rcnn_label = get_rcnn_fpn_names()
-    pred = rcnn_pred + ['mask_prob']
-    label = rcnn_label + ['mask_target', 'mask_weight']
+    pred = rcnn_pred + ['keypoint_prob']
+    label = rcnn_label + ['keypoint_target']
     return pred, label
 
 
@@ -164,6 +164,28 @@ class RCNNLogLossMetric(mx.metric.EvalMetric):
 
         cls = pred[np.arange(label.shape[0]), label]
 
+        index = np.where(label != -1)
+        cls = cls[index]
+
+        cls += 1e-14
+        cls_loss = -1 * np.log(cls)
+        cls_loss = np.sum(cls_loss)
+        self.sum_metric += cls_loss
+        self.num_inst += index[0].shape[0]
+
+
+class KeypointLossMetric(mx.metric.EvalMetric):
+    def __init__(self):
+        super(KeypointLossMetric, self).__init__('KeypointLoss')
+        self.pred, self.label = get_maskrcnn_fpn_name()
+
+    def update(self, labels, preds):
+        label = labels[self.label.index('keypoint_target')].asnumpy().astype("int32")
+        # print('label shape', label.shape)
+        pred = preds[self.pred.index('keypoint_prob')].asnumpy()
+        # print('pred shape', pred.shape)
+        # pred = pred.reshape((-1, 56*56))
+        cls = pred[np.arange(label.shape[0]), label]
         index = np.where(label != -1)
         cls = cls[index]
 

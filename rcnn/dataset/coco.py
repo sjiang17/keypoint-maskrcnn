@@ -9,6 +9,7 @@ from six.moves import range, zip, cPickle
 from multiprocessing.dummy import Pool
 from imdb import IMDB
 from ..core.segms import flip_segms
+from ..core.keypoint_utils import flip_keypoints
 from ..processing.bbox_transform import bbox_overlaps
 
 # coco api
@@ -61,7 +62,8 @@ class coco(IMDB):
 
     def _get_ann_file(self):
         """ self.data_path / annotations / instances_train2014.json """
-        prefix = 'instances' if 'test' not in self.image_set else 'image_info'
+        # prefix = 'instances' if 'test' not in self.image_set else 'image_info'
+        prefix = 'person_keypoints' if 'test' not in self.image_set else 'image_info'
         return os.path.join(self.data_path, 'annotations', 'person', prefix + '_' + self.image_set + '.json')
 
     def _load_image_set_index(self):
@@ -99,29 +101,35 @@ class coco(IMDB):
             if gt_roidb is not None and gt_roidb[i]['boxes'].size > 0:
                 gt_boxes = gt_roidb[i]['boxes']
                 gt_classes = gt_roidb[i]['gt_classes']
-                gt_instances = gt_roidb[i]['ins_id']
+                # gt_instances = gt_roidb[i]['ins_id']
+                gt_keypoints = gt_roidb[i]['kp_id']
                 # n proposals and k gt_boxes => n * k overlap
                 gt_overlaps = bbox_overlaps(proposals.astype(np.float32, copy=False),
                                             gt_boxes.astype(np.float32, copy=False))
                 max_overlaps = gt_overlaps.max(axis=1)
                 max_overlap_box_ids = gt_overlaps.argmax(axis=1)
-                max_instances = gt_instances[max_overlap_box_ids]
+                # max_instances = gt_instances[max_overlap_box_ids]
                 max_classes = gt_classes[max_overlap_box_ids]
                 max_classes[max_overlaps == 0] = 0
+                max_keypoints = gt_keypoints[max_overlap_box_ids]
 
                 roi_rec.update({'boxes': proposals,
                                 'gt_classes': np.zeros((num_proposals,), dtype=np.int32),
                                 'max_classes': max_classes,
                                 'max_overlaps': max_overlaps,
-                                'ins_id': max_instances,
-                                'flipped': False})
+                                # 'ins_id': max_instances,
+                                'flipped': False,
+                                'kp_id': max_keypoints
+                                })
             else:
                 roi_rec.update({'boxes': proposals,
                                 'gt_classes': np.zeros((num_proposals,), dtype=np.int32),
                                 'max_classes': np.zeros((num_proposals,), dtype=np.int32),
                                 'max_overlaps': np.zeros((num_proposals,), dtype=np.float32),
-                                'ins_id': np.zeros((num_proposals,), dtype=np.int32),
-                                'flipped': False})
+                                # 'ins_id': np.zeros((num_proposals,), dtype=np.int32),
+                                'flipped': False,
+                                'kp_id': np.zeros((num_proposals,), dtype=np.int32),
+                                })
             # background roi => background class
             zero_indexes = np.where(roi_rec['max_overlaps'] == 0)[0]
             assert all(roi_rec['max_classes'][zero_indexes] == 0)
@@ -191,8 +199,10 @@ class coco(IMDB):
         gt_boxes = np.zeros((num_anns, 4), dtype=np.float32)
         gt_classes = np.zeros((num_anns, ), dtype=np.int32)
         overlaps = np.zeros((num_anns, self.num_classes), dtype=np.float32)
-        ins_id = np.arange(num_anns)
+        # ins_id = np.arange(num_anns)
         ins_poly = [_['segmentation'] for _ in ann_objs]  # polys are list of list, since instance can be multi-part
+        kp_keypoints = np.zeros((num_anns, 17, 3), dtype=np.float32)
+        kp_id = np.arange(num_anns)
 
         for i, ann_obj in enumerate(ann_objs):
             cls = self._coco_ind_to_class_ind[ann_obj['category_id']]
@@ -202,6 +212,9 @@ class coco(IMDB):
                 overlaps[i, :] = -1.0
             else:
                 overlaps[i, cls] = 1.0
+            kp_keypoints[i] = np.array(ann_obj['keypoints'], dtype=np.float32).reshape((17, 3))
+            # print("coco", kp_keypoints[i])
+        # exit()
 
         if self.load_memory:
             image = cv2.imread(self.image_path_from_index(index))
@@ -214,9 +227,12 @@ class coco(IMDB):
                    'gt_classes': gt_classes,
                    'max_classes': overlaps.argmax(axis=1),
                    'max_overlaps': overlaps.max(axis=1),
-                   'flipped': False}
-        if self.use_mask:
-            roi_rec.update({'ins_id': ins_id, 'ins_poly': ins_poly})
+                   'flipped': False,
+                   'keypoints': kp_keypoints,
+                   'kp_id': kp_id
+                   }
+        # if self.use_mask:
+        #     roi_rec.update({'ins_id': ins_id, 'ins_poly': ins_poly})
 
         return roi_rec
 
@@ -251,10 +267,13 @@ class coco(IMDB):
                      'gt_classes': roirec['gt_classes'],
                      'max_classes': roirec['max_classes'],
                      'max_overlaps': roirec['max_overlaps'],
-                     'flipped': True}
-            if self.use_mask:
-                entry.update({'ins_id': roirec['ins_id'],
-                              'ins_poly': flip_segms(roirec['ins_poly'], roirec['height'], roirec['width'])})
+                     'flipped': True,
+                     'keypoints': flip_keypoints(roirec['keypoints'], roirec['width']),
+                     'kp_id': roirec['kp_id']
+                     }
+            # if self.use_mask:
+            #     entry.update({'ins_id': roirec['ins_id'],
+            #                   'ins_poly': flip_segms(roirec['ins_poly'], roirec['height'], roirec['width'])})
             roidb.append(entry)
 
         self.image_set_index *= 2
