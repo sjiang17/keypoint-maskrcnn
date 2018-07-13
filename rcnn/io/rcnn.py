@@ -264,6 +264,12 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     bbox_target_data = bbox_targets[keep_indexes, :]
     bbox_targets, bbox_weights = expand_bbox_regression_targets(bbox_target_data, num_classes)
 
+    # load keypoint target
+    kp_ids_new = kp_ids[keep_indexes][:fg_rois_per_image]
+    keypoint_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, 17), dtype=np.int32)
+    for i in range(len(kp_ids_new)):
+        keypoint_targets[i] = keypoints_to_vec_wrt_box(keypoints[kp_ids_new[i]], rois[i] / im_info[2], config.KEYPOINT.MAPSIZE)
+
     # # load mask target
     # if mask_targets is not None and mask_labels is not None and mask_inds is not None:
     #     mask_targets = _mask_scatter(mask_targets, mask_labels, mask_inds, num_rois, num_classes)
@@ -279,62 +285,56 @@ def sample_rois_fpn(roidb, rois, fg_rois_per_image, rois_per_image, num_classes,
     #     # for each fg roi, (real fg rois, since it may be less than 128)
     #     for i in range(fg_rois_this_image):                                         # im_info[2] is image_scale
     #         mask_targets[i, labels[i]] = polys_to_mask_wrt_box(ins_polys[ins_ids[i]], rois[i] / im_info[2], 28)
-        #polys_gt_inds = np.where((roidb['gt_classes'] > 0))[0]
-        #polys_gt = [roidb['ins_poly'][i] for i in polys_gt_inds]
-        #boxes_from_polys = polys_to_boxes(polys_gt)
-        #mask_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, num_classes, 28, 28), dtype=np.float32)
-        ## Find overlap between all foreground rois and the bounding boxes
-        ## enclosing each segmentation
-        #rois_fg = rois[:fg_rois_this_image]
-        #overlaps_bbfg_bbpolys = bbox_overlaps(
-        #    rois_fg.astype(np.float32, copy=False),
-        #    boxes_from_polys.astype(np.float32, copy=False)
-        #)
-        ## Map from each fg rois to the index of the mask with highest overlap
-        ## (measured by bbox overlap)
-        #fg_polys_inds = np.argmax(overlaps_bbfg_bbpolys, axis=1)
-        ##print (fg_polys_inds)
-        ## add fg targets
-        #im_name = roidb["image"]
-        #for i in range(rois_fg.shape[0]):
-        #    fg_polys_ind = fg_polys_inds[i]
-        #    poly_gt = polys_gt[fg_polys_ind]
-        #    roi_fg = rois_fg[i]
-        #    im_ori = cv2.imread(im_name)
-        #    im_name_cur = "./mask_ins/" + (im_name.split("/"))[-1][:-4] + "_" + str(i) + ".jpg"
-        #    roi_cur = roi_fg / im_info[2]
-        #    cv2.rectangle(im_ori, (int(roi_cur[0]),int(roi_cur[1])), (int(roi_cur[2]),int(roi_cur[3])), (0,255,0), 1)
-        #    #pts1 = np.array([[roi_cur[0],roi_cur[1]],[roi_cur[2],roi_cur[3]]], np.int32)
-        #    #pts1 = pts1.reshape((-1,1,2))
-        #    for item_ins in poly_gt:
-        #        seq = []
-        #        for idx in range(len(item_ins)/2):
-        #            x = item_ins[idx * 2]
-        #            y = item_ins[idx * 2 + 1]
-        #            seq.append([x,y])
-        #        pts = np.array(seq, np.int32)
-        #        pts = pts.reshape((-1,1,2))
-        #        cv2.polylines(im_ori,[pts],True,(0,255,255))
-        #    cv2.imwrite(im_name_cur, im_ori)
-        #    # Rasterize the portion of the polygon mask within the given fg roi
-        #    # to an M x M binary image
-        #    mask = polys_to_mask_wrt_box(poly_gt, roi_fg, 28)
-        #    mask = np.array(mask > 0, dtype=np.int32)  # Ensure it's binary
-        #    #masks[i, :] = np.reshape(mask, M**2)
-        #    mask_targets[i, labels[i]] = np.reshape(mask, (28,28))
-
-    kp_ids_new = kp_ids[keep_indexes][:fg_rois_per_image]
-    keypoint_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, 17), dtype=np.int32)
-    for i in range(len(kp_ids_new)):
-        keypoint_targets[i] = keypoints_to_vec_wrt_box(keypoints[kp_ids_new[i]], rois[i] / im_info[2], config.KEYPOINT.MAPSIZE)
+    #
+        # #polys_gt_inds = np.where((roidb['gt_classes'] > 0))[0]
+        # #polys_gt = [roidb['ins_poly'][i] for i in polys_gt_inds]
+        # #boxes_from_polys = polys_to_boxes(polys_gt)
+        # #mask_targets = np.full(fill_value=-1, shape=(fg_rois_per_image, num_classes, 28, 28), dtype=np.float32)
+        # ## Find overlap between all foreground rois and the bounding boxes
+        # ## enclosing each segmentation
+        # #rois_fg = rois[:fg_rois_this_image]
+        # #overlaps_bbfg_bbpolys = bbox_overlaps(
+        # #    rois_fg.astype(np.float32, copy=False),
+        # #    boxes_from_polys.astype(np.float32, copy=False)
+        # #)
+        # ## Map from each fg rois to the index of the mask with highest overlap
+        # ## (measured by bbox overlap)
+        # #fg_polys_inds = np.argmax(overlaps_bbfg_bbpolys, axis=1)
+        # ##print (fg_polys_inds)
+        # ## add fg targets
+        # #im_name = roidb["image"]
+        # #for i in range(rois_fg.shape[0]):
+        # #    fg_polys_ind = fg_polys_inds[i]
+        # #    poly_gt = polys_gt[fg_polys_ind]
+        # #    roi_fg = rois_fg[i]
+        # #    im_ori = cv2.imread(im_name)
+        # #    im_name_cur = "./mask_ins/" + (im_name.split("/"))[-1][:-4] + "_" + str(i) + ".jpg"
+        # #    roi_cur = roi_fg / im_info[2]
+        # #    cv2.rectangle(im_ori, (int(roi_cur[0]),int(roi_cur[1])), (int(roi_cur[2]),int(roi_cur[3])), (0,255,0), 1)
+        # #    #pts1 = np.array([[roi_cur[0],roi_cur[1]],[roi_cur[2],roi_cur[3]]], np.int32)
+        # #    #pts1 = pts1.reshape((-1,1,2))
+        # #    for item_ins in poly_gt:
+        # #        seq = []
+        # #        for idx in range(len(item_ins)/2):
+        # #            x = item_ins[idx * 2]
+        # #            y = item_ins[idx * 2 + 1]
+        # #            seq.append([x,y])
+        # #        pts = np.array(seq, np.int32)
+        # #        pts = pts.reshape((-1,1,2))
+        # #        cv2.polylines(im_ori,[pts],True,(0,255,255))
+        # #    cv2.imwrite(im_name_cur, im_ori)
+        # #    # Rasterize the portion of the polygon mask within the given fg roi
+        # #    # to an M x M binary image
+        # #    mask = polys_to_mask_wrt_box(poly_gt, roi_fg, 28)
+        # #    mask = np.array(mask > 0, dtype=np.int32)  # Ensure it's binary
+        # #    #masks[i, :] = np.reshape(mask, M**2)
+        # #    mask_targets[i, labels[i]] = np.reshape(mask, (28,28))
 
     # if mask_targets is not None:
-    #     # print("&&&&&&&&&&&&&& mask_targets shape:", mask_targets.shape)
-    #     # print("&&&&&&&&&&&&&& num_classes:", num_classes)
     #     return rois_on_levels, labels, bbox_targets, bbox_weights, mask_targets, keypoint_targets
     # else:
     #     return rois_on_levels, labels, bbox_targets, bbox_weights
-    # print(keypoint_targets[:20,:])
+
     return rois_on_levels, labels, bbox_targets, bbox_weights, keypoint_targets
 
 

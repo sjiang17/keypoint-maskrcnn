@@ -25,7 +25,6 @@ def alternate_train(args, ctx, pretrained, epoch,
     model_path = args.prefix
     args.resume = True
     logging.info('########## TRAIN RCNN WITH IMAGENET INIT AND RPN DETECTION')
-    args.no_flip = True
     train_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path,
                    args.frequent, args.kvstore, args.work_load_list, args.no_flip, args.no_shuffle, args.resume,
                    ctx, pretrained, epoch, model_path + '/rcnn1', begin_epoch, rcnn_epoch,

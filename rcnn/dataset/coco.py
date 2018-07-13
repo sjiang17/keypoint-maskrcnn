@@ -45,12 +45,10 @@ class coco(IMDB):
         self.num_classes = len(self.classes)
         print('num of categories:', self.num_classes)
         self._class_to_ind = dict(zip(self.classes, range(self.num_classes)))
-        # print(self.coco.getCatIds())
         # self._class_to_coco_ind = dict(zip(cats, self.coco.getCatIds()))
         self._class_to_coco_ind = dict(zip(cats, [1]))
         self._coco_ind_to_class_ind = dict([(self._class_to_coco_ind[cls], self._class_to_ind[cls])
                                             for cls in self.classes[1:]])
-        print(self._coco_ind_to_class_ind)
         # load image file names
         self.image_set_index = self._load_image_set_index()
         self.num_images = len(self.image_set_index)
@@ -200,7 +198,7 @@ class coco(IMDB):
         gt_classes = np.zeros((num_anns, ), dtype=np.int32)
         overlaps = np.zeros((num_anns, self.num_classes), dtype=np.float32)
         # ins_id = np.arange(num_anns)
-        ins_poly = [_['segmentation'] for _ in ann_objs]  # polys are list of list, since instance can be multi-part
+        # ins_poly = [_['segmentation'] for _ in ann_objs]  # polys are list of list, since instance can be multi-part
         kp_keypoints = np.zeros((num_anns, 17, 3), dtype=np.float32)
         kp_id = np.arange(num_anns)
 
@@ -213,8 +211,6 @@ class coco(IMDB):
             else:
                 overlaps[i, cls] = 1.0
             kp_keypoints[i] = np.array(ann_obj['keypoints'], dtype=np.float32).reshape((17, 3))
-            # print("coco", kp_keypoints[i])
-        # exit()
 
         if self.load_memory:
             image = cv2.imread(self.image_path_from_index(index))

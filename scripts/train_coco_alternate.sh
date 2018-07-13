@@ -6,9 +6,9 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/sample/
+TRAIN_DIR=model/res50-fpn/coco/train2017/
 DATASET=coco
-SET=sample2017
+SET=train2017
 #TEST_SET=minival2014
 mkdir -p ${TRAIN_DIR}
 

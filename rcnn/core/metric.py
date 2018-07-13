@@ -106,9 +106,7 @@ class MaskAccMetric(mx.metric.EvalMetric):
         mask_prob = preds[self.pred.index('mask_prob')].asnumpy()  # (n_rois, c, h, w)
         mr = mask_prob.shape[-1]  # mask resolution
         label = labels[self.label.index('label')].asnumpy().reshape((-1,)).astype("int32")
-        # print('label:', label)
         mask_target = labels[self.label.index('mask_target')].asnumpy().reshape((-1, config.NUM_CLASSES, mr, mr))
-        # print('index:', self.label.index('mask_weight'))
         mask_weight = labels[self.label.index('mask_weight')].asnumpy().reshape((-1, config.NUM_CLASSES, 1, 1))
 
         real_inds = np.where(label != 0)[0]  # foreground mask only
@@ -180,11 +178,8 @@ class KeypointLossMetric(mx.metric.EvalMetric):
         self.pred, self.label = get_maskrcnn_fpn_name()
 
     def update(self, labels, preds):
-        label = labels[self.label.index('keypoint_target')].asnumpy().astype("int32")
-        # print('label shape', label.shape)
+        label = labels[self.label.index('keypoint_target')].asnumpy().astype("int32").flatten()
         pred = preds[self.pred.index('keypoint_prob')].asnumpy()
-        # print('pred shape', pred.shape)
-        # pred = pred.reshape((-1, 56*56))
         cls = pred[np.arange(label.shape[0]), label]
         index = np.where(label != -1)
         cls = cls[index]

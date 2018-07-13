@@ -473,11 +473,9 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     roi_pool = mx.sym.add_n(*fpn_roi_feats)
 
     mask_roi_feats = list()
-    temp_debug = []
     for stride in rcnn_feat_stride:
         feat_lvl = conv_fpn_feat["stride%s" % stride]
         rois_lvl = rois["stride%s" % stride]
-        temp_debug.append(feat_lvl)
         mask_feat = mx.sym.contrib.ROIAlign_v2(
             name="roi_mask", data=feat_lvl, rois=rois_lvl, pooled_size=(14, 14), spatial_scale=1.0 / stride)
         mask_roi_feats.append(mask_feat)
@@ -584,25 +582,25 @@ def get_resnet_fpn_maskrcnn(num_classes=config.NUM_CLASSES):
     kp_conv_8 = mx.sym.Convolution(data=kp_relu_7, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_8")
     kp_relu_8 = mx.sym.Activation(data=kp_conv_8, act_type="relu", name="kp_relu_8")
 
-    # kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(4, 4), stride=(2, 2), num_filter=17, name="kp_deconv_1",
-    #                                    target_shape=(28, 28))
-    # kp_upsample = mx.sym.UpSampling(data=kp_deconv_1, scale=2, num_filter=17, sample_type='bilinear', name='kp_upsample')
+    kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(4, 4), stride=(2, 2), num_filter=17, name="kp_deconv_1",
+                                       target_shape=(28, 28))
+    kp_upsample = mx.sym.UpSampling(data=kp_deconv_1, scale=2, num_filter=17, sample_type='bilinear', name='kp_upsample')
+
+    kp_prob = kp_upsample.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE))
+
+    # kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(2, 2), stride=(2, 2), num_filter=512,
+    #                                      name="kp_deconv_1")
+    # kp_relu_9 = mx.sym.Activation(data=kp_deconv_1, act_type="relu", name="kp_relu_9")
     #
-    # kp_prob = kp_upsample.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE), name='keypoint_prob')
+    # kp_upsample = mx.sym.UpSampling(data=kp_relu_9, scale=2, num_filter=512, sample_type='bilinear', name='kp_upsample')
+    #
+    # kp_deconv_2 = mx.sym.Convolution(data=kp_upsample, kernel=(1, 1), num_filter=17, name="kp_deconv_2")
+    #
+    # kp_deconv_2 = kp_deconv_2.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE))
 
-    kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(2, 2), stride=(2, 2), num_filter=512,
-                                         name="kp_deconv_1")
-    kp_relu_9 = mx.sym.Activation(data=kp_deconv_1, act_type="relu", name="kp_relu_9")
+    # keypoint_target = keypoint_target.reshape((num_fg_rois*17,))
 
-    kp_upsample = mx.sym.UpSampling(data=kp_relu_9, scale=2, num_filter=512, sample_type='bilinear', name='kp_upsample')
-
-    kp_deconv_2 = mx.sym.Convolution(data=kp_upsample, kernel=(1, 1), num_filter=17, name="kp_deconv_2")
-
-    kp_deconv_2 = kp_deconv_2.reshape((num_fg_rois*17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE))
-
-    keypoint_target = keypoint_target.reshape((num_fg_rois*17,))
-
-    kp_loss = mx.sym.SoftmaxOutput(data=kp_deconv_2, label=keypoint_target, multi_output=True, use_ignore=True,
+    kp_loss = mx.sym.SoftmaxOutput(data=kp_prob, label=keypoint_target, multi_output=True, use_ignore=True,
                                    ignore_label=-1, name='kp_output', normalization='valid')
     kp_group = [kp_loss]
 
