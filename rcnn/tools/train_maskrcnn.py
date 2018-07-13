@@ -272,123 +272,123 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                         'rescale_grad': (1.0 / batch_size)}
                         #'clip_gradient': 5}
 
-    # # train
-    # mod.fit(train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
-    #         batch_end_callback=batch_end_callback, kvstore=kvstore,
-    #         optimizer='sgd', optimizer_params=optimizer_params,
-    #         arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
-
-
-    #####################################
-    # DEBUG USE ONLY
-    #####################################
-    from mxnet.initializer import Uniform
-    from mxnet.model import BatchEndParam
-    from mxnet.base import _as_list
-    from mxnet import metric as bMetric
-    import time
-    import cPickle
-    import os
-
-    def myfit(mod, train_data, eval_data=None, eval_metric='acc',
-            epoch_end_callback=None, batch_end_callback=None, kvstore='local',
-            optimizer='sgd', optimizer_params=(('learning_rate', 0.01),),
-            eval_end_callback=None,
-            eval_batch_end_callback=None, initializer=Uniform(0.01),
-            arg_params=None, aux_params=None, allow_missing=False,
-            force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
-            validation_metric=None, monitor=None):
-
-        assert num_epoch is not None, 'please specify number of epochs'
-
-        mod.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label,
-                  for_training=True, force_rebind=force_rebind)
-
-        mod.init_params(initializer=initializer, arg_params=arg_params, aux_params=aux_params,
-                         allow_missing=allow_missing, force_init=force_init)
-        mod.init_optimizer(kvstore=kvstore, optimizer=optimizer,
-                            optimizer_params=optimizer_params)
-
-        if not isinstance(eval_metric, bMetric.EvalMetric):
-            eval_metric = bMetric.create(eval_metric)
-
-        ################################################################################
-        # training loop
-        ################################################################################
-        for epoch in range(begin_epoch, num_epoch):
-            tic = time.time()
-            eval_metric.reset()
-            nbatch = 0
-            data_iter = iter(train_data)
-            end_of_batch = False
-            next_data_batch = next(data_iter)
-            cnt = 0
-            while not end_of_batch:
-                data_batch = next_data_batch
-                print('----------DEBUG---------')
-                debug_save_dir = 'debug/save3/'
-                cPickle.dump(data_batch.data, open(os.path.join(debug_save_dir, 'data{}.pkl'.format(cnt)), 'w'))
-                cPickle.dump(data_batch.label, open(os.path.join(debug_save_dir, 'label{}.pkl'.format(cnt)), 'w'))
-
-                # print(type(data_batch.data))
-                # print(len(data_batch.label))
-                # print((data_batch.data[0]))
-                # print((data_batch.data[0].shape))
-                # print((data_batch.data[1].shape))
-                # print((data_batch.data[2].shape))
-                # print((data_batch.data[3].shape))
-                # print((data_batch.data[4].shape))
-                cnt += 1
-                if cnt == 50:
-                    exit()
-
-                mod.forward_backward(data_batch)
-                mod.update()
-                try:
-                    # pre fetch next batch
-                    next_data_batch = next(data_iter)
-                    mod.prepare(next_data_batch)
-                except StopIteration:
-                    end_of_batch = True
-
-                mod.update_metric(eval_metric, data_batch.label)
-
-                if batch_end_callback is not None:
-                    batch_end_params = BatchEndParam(epoch=epoch, nbatch=nbatch,
-                                                     eval_metric=eval_metric,
-                                                     locals=locals())
-                    for callback in _as_list(batch_end_callback):
-                        callback(batch_end_params)
-                nbatch += 1
-
-            # one epoch of training is finished
-            for name, val in eval_metric.get_name_value():
-                mod.logger.info('Epoch[%d] Train-%s=%f', epoch, name, val)
-            toc = time.time()
-            mod.logger.info('Epoch[%d] Time cost=%.3f', epoch, (toc - tic))
-
-            # sync aux params across devices
-            arg_params, aux_params = mod.get_params()
-            mod.set_params(arg_params, aux_params)
-
-            if epoch_end_callback is not None:
-                for callback in _as_list(epoch_end_callback):
-                    callback(epoch, mod.symbol, arg_params, aux_params)
-
-            # # ----------------------------------------
-            # # evaluation on validation set
-            # if eval_data:
-            #     res = self.score(eval_data, validation_metric,
-            #                      score_end_callback=eval_end_callback,
-            #                      batch_end_callback=eval_batch_end_callback, epoch=epoch)
-            #     # TODO: pull this into default
-            #     for name, val in res:
-            #         self.logger.info('Epoch[%d] Validation-%s=%f', epoch, name, val)
-
-            # end of 1 epoch, reset the data-iter for another epoch
-            train_data.reset()
-
-    myfit(mod, train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
+    # train
+    mod.fit(train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
             batch_end_callback=batch_end_callback, kvstore=kvstore,
             optimizer='sgd', optimizer_params=optimizer_params,
             arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
+
+
+    # #####################################
+    # # DEBUG USE ONLY
+    # #####################################
+    # from mxnet.initializer import Uniform
+    # from mxnet.model import BatchEndParam
+    # from mxnet.base import _as_list
+    # from mxnet import metric as bMetric
+    # import time
+    # import cPickle
+    # import os
+    #
+    # def myfit(mod, train_data, eval_data=None, eval_metric='acc',
+    #         epoch_end_callback=None, batch_end_callback=None, kvstore='local',
+    #         optimizer='sgd', optimizer_params=(('learning_rate', 0.01),),
+    #         eval_end_callback=None,
+    #         eval_batch_end_callback=None, initializer=Uniform(0.01),
+    #         arg_params=None, aux_params=None, allow_missing=False,
+    #         force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
+    #         validation_metric=None, monitor=None):
+    #
+    #     assert num_epoch is not None, 'please specify number of epochs'
+    #
+    #     mod.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label,
+    #               for_training=True, force_rebind=force_rebind)
+    #
+    #     mod.init_params(initializer=initializer, arg_params=arg_params, aux_params=aux_params,
+    #                      allow_missing=allow_missing, force_init=force_init)
+    #     mod.init_optimizer(kvstore=kvstore, optimizer=optimizer,
+    #                         optimizer_params=optimizer_params)
+    #
+    #     if not isinstance(eval_metric, bMetric.EvalMetric):
+    #         eval_metric = bMetric.create(eval_metric)
+    #
+    #     ################################################################################
+    #     # training loop
+    #     ################################################################################
+    #     for epoch in range(begin_epoch, num_epoch):
+    #         tic = time.time()
+    #         eval_metric.reset()
+    #         nbatch = 0
+    #         data_iter = iter(train_data)
+    #         end_of_batch = False
+    #         next_data_batch = next(data_iter)
+    #         cnt = 0
+    #         while not end_of_batch:
+    #             data_batch = next_data_batch
+    #             print('----------DEBUG---------')
+    #             debug_save_dir = 'debug/save3/'
+    #             cPickle.dump(data_batch.data, open(os.path.join(debug_save_dir, 'data{}.pkl'.format(cnt)), 'w'))
+    #             cPickle.dump(data_batch.label, open(os.path.join(debug_save_dir, 'label{}.pkl'.format(cnt)), 'w'))
+    #
+    #             # print(type(data_batch.data))
+    #             # print(len(data_batch.label))
+    #             # print((data_batch.data[0]))
+    #             # print((data_batch.data[0].shape))
+    #             # print((data_batch.data[1].shape))
+    #             # print((data_batch.data[2].shape))
+    #             # print((data_batch.data[3].shape))
+    #             # print((data_batch.data[4].shape))
+    #             cnt += 1
+    #             if cnt == 50:
+    #                 exit()
+    #
+    #             mod.forward_backward(data_batch)
+    #             mod.update()
+    #             try:
+    #                 # pre fetch next batch
+    #                 next_data_batch = next(data_iter)
+    #                 mod.prepare(next_data_batch)
+    #             except StopIteration:
+    #                 end_of_batch = True
+    #
+    #             mod.update_metric(eval_metric, data_batch.label)
+    #
+    #             if batch_end_callback is not None:
+    #                 batch_end_params = BatchEndParam(epoch=epoch, nbatch=nbatch,
+    #                                                  eval_metric=eval_metric,
+    #                                                  locals=locals())
+    #                 for callback in _as_list(batch_end_callback):
+    #                     callback(batch_end_params)
+    #             nbatch += 1
+    #
+    #         # one epoch of training is finished
+    #         for name, val in eval_metric.get_name_value():
+    #             mod.logger.info('Epoch[%d] Train-%s=%f', epoch, name, val)
+    #         toc = time.time()
+    #         mod.logger.info('Epoch[%d] Time cost=%.3f', epoch, (toc - tic))
+    #
+    #         # sync aux params across devices
+    #         arg_params, aux_params = mod.get_params()
+    #         mod.set_params(arg_params, aux_params)
+    #
+    #         if epoch_end_callback is not None:
+    #             for callback in _as_list(epoch_end_callback):
+    #                 callback(epoch, mod.symbol, arg_params, aux_params)
+    #
+    #         # # ----------------------------------------
+    #         # # evaluation on validation set
+    #         # if eval_data:
+    #         #     res = self.score(eval_data, validation_metric,
+    #         #                      score_end_callback=eval_end_callback,
+    #         #                      batch_end_callback=eval_batch_end_callback, epoch=epoch)
+    #         #     # TODO: pull this into default
+    #         #     for name, val in res:
+    #         #         self.logger.info('Epoch[%d] Validation-%s=%f', epoch, name, val)
+    #
+    #         # end of 1 epoch, reset the data-iter for another epoch
+    #         train_data.reset()
+    #
+    # myfit(mod, train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
+    #         batch_end_callback=batch_end_callback, kvstore=kvstore,
+    #         optimizer='sgd', optimizer_params=optimizer_params,
+    #         arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
