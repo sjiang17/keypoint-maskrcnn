@@ -6,7 +6,7 @@ export PYTHONUNBUFFERED=1
 #export MXNET_PROFILER_MODE=1
 #export MXNET_PROFILER_AUTOSTART=1
 
-TRAIN_DIR=model/res50-fpn/coco/train2017/
+TRAIN_DIR=model/res50-fpn/coco/train2017_nofix/
 DATASET=coco
 SET=train2017
 #TEST_SET=minival2014
@@ -15,7 +15,7 @@ mkdir -p ${TRAIN_DIR}
 # Train
 echo "current workspace: $(pwd)"
 
-GPU=0
+GPU=4,5,6,7
 
 # Train
 #python train_alternate_mask_fpn_stage1.py \

@@ -145,20 +145,27 @@ def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.
     rcnn_fc_bbox_weight = mx.symbol.Variable('rcnn_fc_bbox_weight')
     rcnn_fc_bbox_bias = mx.symbol.Variable('rcnn_fc_bbox_bias')
 
-    mask_conv_1_weight = mx.symbol.Variable('mask_conv_1_weight')
-    mask_conv_1_bias = mx.symbol.Variable('mask_conv_1_bias')
-    mask_conv_2_weight = mx.symbol.Variable('mask_conv_2_weight')
-    mask_conv_2_bias = mx.symbol.Variable('mask_conv_2_bias')
-    mask_conv_3_weight = mx.symbol.Variable('mask_conv_3_weight')
-    mask_conv_3_bias = mx.symbol.Variable('mask_conv_3_bias')
-    mask_conv_4_weight = mx.symbol.Variable('mask_conv_4_weight')
-    mask_conv_4_bias = mx.symbol.Variable('mask_conv_4_bias')
-    mask_deconv_1_weight = mx.symbol.Variable('mask_deconv_1_weight')
-    mask_deconv_2_weight = mx.symbol.Variable('mask_deconv_2_weight')
-    mask_deconv_2_bias = mx.symbol.Variable('mask_deconv_2_bias')
+    kp_conv_1_weight = mx.symbol.Variable('kp_conv_1_weight')
+    kp_conv_1_bias = mx.symbol.Variable('kp_conv_1_bias')
+    kp_conv_2_weight = mx.symbol.Variable('kp_conv_2_weight')
+    kp_conv_2_bias = mx.symbol.Variable('kp_conv_2_bias')
+    kp_conv_3_weight = mx.symbol.Variable('kp_conv_3_weight')
+    kp_conv_3_bias = mx.symbol.Variable('kp_conv_3_bias')
+    kp_conv_4_weight = mx.symbol.Variable('kp_conv_4_weight')
+    kp_conv_4_bias = mx.symbol.Variable('kp_conv_4_bias')
+    kp_conv_5_weight = mx.symbol.Variable('kp_conv_5_weight')
+    kp_conv_5_bias = mx.symbol.Variable('kp_conv_5_bias')
+    kp_conv_6_weight = mx.symbol.Variable('kp_conv_6_weight')
+    kp_conv_6_bias = mx.symbol.Variable('kp_conv_6_bias')
+    kp_conv_7_weight = mx.symbol.Variable('kp_conv_7_weight')
+    kp_conv_7_bias = mx.symbol.Variable('kp_conv_7_bias')
+    kp_conv_8_weight = mx.symbol.Variable('kp_conv_8_weight')
+    kp_conv_8_bias = mx.symbol.Variable('kp_conv_8_bias')
+    kp_deconv_1_weight = mx.symbol.Variable('kp_deconv_1_weight')
+    # kp_deconv_1_bias = mx.symbol.Variable('kp_deconv_1_bias')
 
-    rpn_cls_prob_dict = {}
-    rpn_bbox_pred_dict = {}
+    num_fg_rois = int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION)
+
     rpn_rois_list = []
     rpn_cls_list = []
     for stride in config.RPN_FEAT_STRIDE:
@@ -251,45 +258,64 @@ def get_resnet_fpn_mask_test(num_classes=config.NUM_CLASSES, num_anchors=config.
                                        name='bbox_pred_reshape')
 
     # we can control #rois within this op
-    mask_rois, pred_boxes, score = \
+    kp_rois, pred_boxes, score = \
         mx.symbol.Custom(data=data, label=rcnn_cls_prob, rois=rois, bbox_deltas=rcnn_bbox_pred, im_info=im_info,
                          op_type='MaskROI', num_classes=num_classes, topk=config.TEST.RPN_POST_NMS_TOP_N,
-                         name='mask_roi')
-    mask_rois_reshape = mx.sym.reshape(mask_rois, (-1, 5))
+                         name='kp_roi')
+    kp_rois_reshape = mx.sym.reshape(kp_rois, (-1, 5))
 
     args_dict = {}
     for s in config.RCNN_FEAT_STRIDE:
         args_dict.update({'feat_stride%s' % s: conv_fpn_feat['stride%s' % s]})
 
-    args_dict.update({'rois': mask_rois_reshape, 'name': 'fpn_maskroi_pool',
+    args_dict.update({'rois': kp_rois_reshape, 'name': 'fpn_maskroi_pool',
                       'op_type': 'fpn_roi_pool',
                       'rcnn_strides': config.RCNN_FEAT_STRIDE,
                       'pool_h': 14, 'pool_w': 14})
-    mask_roi_pool = mx.symbol.Custom(**args_dict)
+    kp_roi_pool = mx.symbol.Custom(**args_dict)
 
-    # MASK
-    mask_conv_1 = mx.symbol.Convolution(data=mask_roi_pool, kernel=(3, 3), pad=(1, 1), num_filter=256, workspace=512,
-                                        weight=mask_conv_1_weight, bias=mask_conv_1_bias, name="mask_conv_1")
-    mask_relu_1 = mx.symbol.Activation(data=mask_conv_1, act_type="relu", name="mask_relu_1")
-    mask_conv_2 = mx.symbol.Convolution(data=mask_relu_1, kernel=(3, 3), pad=(1, 1), num_filter=256, workspace=512,
-                                        weight=mask_conv_2_weight, bias=mask_conv_2_bias, name="mask_conv_2")
-    mask_relu_2 = mx.symbol.Activation(data=mask_conv_2, act_type="relu", name="mask_relu_2")
-    mask_conv_3 = mx.symbol.Convolution(data=mask_relu_2, kernel=(3, 3), pad=(1, 1), num_filter=256, workspace=512,
-                                        weight=mask_conv_3_weight, bias=mask_conv_3_bias, name="mask_conv_3")
-    mask_relu_3 = mx.symbol.Activation(data=mask_conv_3, act_type="relu", name="mask_relu_3")
-    mask_conv_4 = mx.symbol.Convolution(data=mask_relu_3, kernel=(3, 3), pad=(1, 1), num_filter=256, workspace=512,
-                                        weight=mask_conv_4_weight, bias=mask_conv_4_bias, name="mask_conv_4")
-    mask_relu_4 = mx.symbol.Activation(data=mask_conv_4, act_type="relu", name="mask_relu_4")
-    mask_deconv_1 = mx.symbol.Deconvolution(data=mask_relu_4, kernel=(2, 2), stride=(2, 2), num_filter=256,
-                                            workspace=512, weight=mask_deconv_1_weight, name="mask_deconv1")
-    mask_relu_5 = mx.sym.Activation(data=mask_deconv_1, act_type="relu", name="mask_relu_5")
-    mask_deconv_2 = mx.symbol.Convolution(data=mask_relu_5, kernel=(1, 1), num_filter=num_classes,
-                                          workspace=512, weight=mask_deconv_2_weight, bias=mask_deconv_2_bias,
-                                          name="mask_deconv2")
-    # group output
-    mask_prob = mx.symbol.Activation(data=mask_deconv_2, act_type='sigmoid', name="mask_prob")
+    kp_conv_1 = mx.sym.Convolution(data=kp_roi_pool, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_1",
+                                   weight=kp_conv_1_weight, bias=kp_conv_1_bias)
+    kp_relu_1 = mx.sym.Activation(data=kp_conv_1, act_type="relu", name="kp_relu_1")
+
+    kp_conv_2 = mx.sym.Convolution(data=kp_relu_1, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_2",
+                                   weight=kp_conv_2_weight, bias=kp_conv_2_bias)
+    kp_relu_2 = mx.sym.Activation(data=kp_conv_2, act_type="relu", name="kp_relu_2")
+
+    kp_conv_3 = mx.sym.Convolution(data=kp_relu_2, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_3",
+                                   weight=kp_conv_3_weight, bias=kp_conv_3_bias)
+    kp_relu_3 = mx.sym.Activation(data=kp_conv_3, act_type="relu", name="kp_relu_3")
+
+    kp_conv_4 = mx.sym.Convolution(data=kp_relu_3, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_4",
+                                   weight=kp_conv_4_weight, bias=kp_conv_4_bias)
+    kp_relu_4 = mx.sym.Activation(data=kp_conv_4, act_type="relu", name="kp_relu_4")
+
+    kp_conv_5 = mx.sym.Convolution(data=kp_relu_4, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_5",
+                                   weight=kp_conv_5_weight, bias=kp_conv_5_bias)
+    kp_relu_5 = mx.sym.Activation(data=kp_conv_5, act_type="relu", name="kp_relu_5")
+
+    kp_conv_6 = mx.sym.Convolution(data=kp_relu_5, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_6",
+                                   weight=kp_conv_6_weight, bias=kp_conv_6_bias)
+    kp_relu_6 = mx.sym.Activation(data=kp_conv_6, act_type="relu", name="kp_relu_6")
+
+    kp_conv_7 = mx.sym.Convolution(data=kp_relu_6, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_7",
+                                   weight=kp_conv_7_weight, bias=kp_conv_7_bias)
+    kp_relu_7 = mx.sym.Activation(data=kp_conv_7, act_type="relu", name="kp_relu_7")
+
+    kp_conv_8 = mx.sym.Convolution(data=kp_relu_7, kernel=(3, 3), pad=(1, 1), num_filter=512, name="kp_conv_8",
+                                   weight=kp_conv_8_weight, bias=kp_conv_8_bias)
+    kp_relu_8 = mx.sym.Activation(data=kp_conv_8, act_type="relu", name="kp_relu_8")
+
+    kp_deconv_1 = mx.sym.Deconvolution(data=kp_relu_8, kernel=(4, 4), stride=(2, 2), num_filter=17, name="kp_deconv_1",
+                                       target_shape=(28, 28), weight=kp_deconv_1_weight)
+    kp_upsample = mx.sym.UpSampling(data=kp_deconv_1, scale=2, num_filter=17, sample_type='bilinear',
+                                    name='kp_upsample')
+    kp_reshape = kp_upsample.reshape((-1, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE))
+    kp_prob = mx.symbol.SoftmaxActivation(data=kp_reshape, name='kp_prob')
+    kp_prob = kp_prob.reshape((config.TEST.BATCH_IMAGES, -1, 17, config.KEYPOINT.MAPSIZE*config.KEYPOINT.MAPSIZE), name='kp_prob_reshape')
+
     #group = mx.symbol.Group([rois, rcnn_bbox_pred, rcnn_cls_prob, mask_prob])
-    group = mx.symbol.Group([pred_boxes, score, mask_prob])
+    group = mx.symbol.Group([pred_boxes, score, kp_prob])
     return group
 
 def get_resnet_fpn_rpn(num_anchors=config.NUM_ANCHORS):

@@ -227,7 +227,13 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
         fixed_param_prefix = config.FIXED_PARAMS_SHARED
     else:
         fixed_param_prefix = config.FIXED_PARAMS
-    fixed_param_prefix += ['rcnn']
+
+    # fix block 0,1 and rcnn
+    # fixed_param_prefix += ['rcnn']
+
+    # fix_all but keypoint head
+    # fixed_param_prefix = ['rcnn', 'conv0', 'stage1', 'stage2', 'stage3', 'stage4',
+    #                       'P5', 'P4', 'P3', 'P2', 'gamma', 'beta']
     mod = MutableModule(sym, data_names=data_names, label_names=label_names,
                         logger=logger, context=ctx, work_load_list=work_load_list,
                         max_data_shapes=max_data_shape, max_label_shapes=max_label_shape,

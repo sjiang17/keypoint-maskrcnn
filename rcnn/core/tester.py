@@ -16,6 +16,8 @@ from ..io import image
 from ..processing.bbox_transform import nonlinear_pred, clip_boxes
 from ..processing.nms import py_nms_wrapper
 
+import matplotlib.pyplot as plt
+
 bbox_pred = nonlinear_pred
 
 
@@ -134,7 +136,7 @@ def generate_proposals(predictor, test_data, imdb, vis=False, thresh=0.):
 def im_detect_mask(predictor, data_batch, data_names, scale):
     output = predictor.predict(data_batch)
     data_dict = dict(zip(data_names, data_batch.data))
-    # print(output.keys()) ['mask_roi_score', 'mask_prob_output', 'mask_roi_pred_boxes']
+    # ['mask_roi_score', 'mask_prob_output', 'mask_roi_pred_boxes']
     if config.TEST.HAS_RPN:
         pred_boxes = output['mask_roi_pred_boxes'].asnumpy()
         scores = output['mask_roi_score'].asnumpy()
@@ -149,6 +151,25 @@ def im_detect_mask(predictor, data_batch, data_names, scale):
         pred_boxes = pred_boxes / scale[:, None, None]
 
     return scores, pred_boxes, data_dict, mask_outputs
+
+
+def im_detect_keypoint(predictor, data_batch, data_names, scale):
+    output = predictor.predict(data_batch)
+    # ['kp_prob_reshape_output', 'kp_roi_pred_boxes', 'kp_roi_score']
+    data_dict = dict(zip(data_names, data_batch.data))
+    if config.TEST.HAS_RPN:
+        pred_boxes = output['kp_roi_pred_boxes'].asnumpy()
+        scores = output['kp_roi_score'].asnumpy()
+        kp_outputs = output['kp_prob_reshape_output'].asnumpy()
+    else:
+        raise NotImplementedError
+    # we used scaled image & roi to train, so it is necessary to transform them back
+    if isinstance(scale, float) or isinstance(scale, int):
+        pred_boxes = pred_boxes / scale
+    elif isinstance(scale, np.ndarray):
+        pred_boxes = pred_boxes / scale[:, None, None]
+
+    return scores, pred_boxes, data_dict, kp_outputs
 
 
 def pred_eval_mask(predictor, test_data, imdb, roidb, result_path, vis=False, thresh=1e-1):
@@ -272,9 +293,6 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         scores, boxes, data_dict, mask_output = im_detect_mask(predictor, data_batch, data_names, scale)
         scores, boxes, mask_output = scores[0], boxes[0], mask_output[0]
 
-        # print (mask_output[0])
-        print (sum(scores[:,1] < scores[:,0]))
-
         all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
         all_masks = [[[] for _ in range(num_images)] for _ in range(num_classes)]
         label = np.argmax(scores, axis=1)
@@ -284,12 +302,10 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
             cls_boxes = boxes[:, 4 * cls_ind:4 * (cls_ind + 1)]
             cls_masks = mask_output[:, cls_ind, :, :]
             cls_scores = scores[:, cls_ind, np.newaxis]
-            # print cls_scores.shape, label.shape
             keep = np.where((cls_scores >= thresh) & (label == cls_ind))[0]
             cls_masks = cls_masks[keep, :, :]
             dets = np.hstack((cls_boxes, cls_scores)).astype(np.float32)[keep, :]
             keep = nms(dets)
-            # print dets.shape, cls_masks.shape
             all_boxes[cls_ind] = dets[keep, :]
             all_masks[cls_ind] = cls_masks[keep, :, :]
 
@@ -303,6 +319,72 @@ def pred_demo_mask(predictor, test_data, imdb, roidb, result_path, vis=False, th
         # draw_detection(data_dict['data'], boxes_this_image, 1.0, filename)
         img_ind += 1
 
+def pred_demo_keypoint(predictor, test_data, imdb, roidb, result_path, vis=False, thresh=1e-1):
+    """
+    wrapper for calculating offline validation for faster data analysis
+    in this example, all threshold are set by hand
+    :param predictor: Predictor
+    :param test_data: data iterator, must be non-shuffle
+    :param imdb: image database
+    :param vis: controls visualization
+    :param thresh: valid detection threshold
+    :return:
+    """
+    assert vis or not test_data.shuffle
+    data_names = [k[0] for k in test_data.provide_data]
+
+    nms = py_nms_wrapper(config.TEST.NMS)
+
+    # limit detections to max_per_image over all classes
+    max_per_image = -1
+
+    num_images = imdb.num_images
+    num_classes = imdb.num_classes
+
+    # all detections are collected into:
+    #    all_boxes[cls][image] = N x 5 array of detections in
+    #    (x1, y1, x2, y2, score)
+
+    img_ind = 0
+    for im_info, data_batch in test_data:
+        roi_rec = roidb[img_ind]
+        scale = im_info[0, 2]
+        scores, boxes, data_dict, kp_output = im_detect_keypoint(predictor, data_batch, data_names, scale)
+        scores, boxes, kp_output = scores[0], boxes[0], kp_output[0]
+
+        all_boxes = [[[] for _ in range(num_images)] for _ in range(num_classes)]
+        # all_masks = [[[] for _ in range(num_images)] for _ in range(num_classes)]
+        all_kps = [[[] for _ in range(num_images)] for _ in range(num_classes)]
+        label = np.argmax(scores, axis=1)
+        label = label[:, np.newaxis]
+        kp_pred = np.argmax(kp_output, axis=2)
+
+        for cls_ind in range(num_classes):
+            cls_boxes = boxes[:, 4 * cls_ind:4 * (cls_ind + 1)]
+            # cls_masks = mask_output[:, cls_ind, :, :]
+            # cls_kps = kp_output[:, cls_ind, :, :]
+            cls_scores = scores[:, cls_ind, np.newaxis]
+            keep = np.where((cls_scores >= thresh) & (label == cls_ind))[0]
+            # cls_masks = cls_masks[keep, :, :]
+            dets = np.hstack((cls_boxes, cls_scores)).astype(np.float32)[keep, :]
+            keep = nms(dets)
+            all_boxes[cls_ind] = dets[keep, :]
+            # all_masks[cls_ind] = cls_masks[keep, :, :]
+
+            # keypoints for person only
+            if cls_ind == 1:
+                all_kps[cls_ind] = kp_pred[keep,:]
+
+        # the first class is empty because it is background
+        boxes_this_image = [[]] + [all_boxes[j] for j in range(1, num_classes)]
+        # masks_this_image = [[]] + [all_masks[j] for j in range(1, num_classes)]
+        kps_this_image = [[]] + [all_kps[j] for j in range(1, num_classes)]
+        filename = roi_rec['image'].split("/")[-1]
+        filename = result_path + '/' + filename.replace('.png', '.jpg')
+        data_dict = dict(zip(data_names, data_batch.data))
+        draw_detection_keypoint(data_dict['data'], boxes_this_image, kps_this_image, 1.0, filename, imdb.classes)
+        # draw_detection(data_dict['data'], boxes_this_image, 1.0, filename)
+        img_ind += 1
 
 def vis_all_detection(im_array, detections, class_names, scale):
     """
@@ -334,7 +416,7 @@ def vis_all_detection(im_array, detections, class_names, scale):
                            '{:s} {:.3f}'.format(name, score),
                            bbox=dict(facecolor=color, alpha=0.5), fontsize=8, color='white')
     # plt.show()
-    save_name = '/mnt/truenas/scratch/siyu/maskrcnn/output/rpn/{}.jpg'.format(random.randint(0, 10000))
+    save_name = 'output/rpn/{}.jpg'.format(random.randint(0, 10000))
     print(save_name)
     plt.axis('off')
     plt.savefig(save_name)
@@ -373,6 +455,56 @@ def draw_detection_mask(im_array, boxes_this_image, masks_this_image, scale, fil
     cv2.imwrite(filename, im)
 
 
+def draw_detection_keypoint(im_array, boxes_this_image, kps_this_image, scale, filename, class_names):
+    colors = np.random.random(size=(17,3))
+    im = image.transform_inverse(im_array.asnumpy(), config.PIXEL_MEANS)
+    plt.imshow(im)
+
+    for j, name in enumerate(class_names):
+        if name == '__background__':
+            continue
+        color = np.random.random(size=(3,))
+        dets = boxes_this_image[j]
+        kps = kps_this_image[j]
+        print('len(dets):', len(dets))
+        for i in range(len(dets)):
+            bbox = dets[i, :4] * scale
+            score = dets[i, -1]
+            bbox = map(int, bbox)
+            rect = plt.Rectangle((bbox[0], bbox[1]), bbox[2] - bbox[0], bbox[3] - bbox[1], fill=False,
+                                 edgecolor=color, linewidth=1.5)
+            plt.gca().add_patch(rect)
+            plt.text(bbox[0], bbox[1]+10, '%s %.3f' % (class_names[j], score), bbox={'facecolor':'white', 'alpha':0.5},
+                     size='x- small')
+            keypoint = kps[i]
+            for k, kp in enumerate(keypoint):
+                xs, ys = decode_keypoint(kp, bbox)
+                plt.plot(xs, ys, 'o', color=colors[k])
+
+    print(filename)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(filename, dpi=199)
+    plt.close('all')
+
+            # bbox = dets[i, :4] * scale
+            # score = dets[i, -1]
+            # bbox = map(int, bbox)
+            # cv2.rectangle(im, (bbox[0], bbox[1]), (bbox[2], bbox[3]), color=color, thickness=2)
+            # cv2.putText(im, '%s %.3f' % (class_names[j], score), (bbox[0], bbox[1] + 10),
+            #             color=color_white, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
+            # mask = masks[i, :, :]
+            # mask = cv2.resize(mask, (bbox[2] - bbox[0], (bbox[3] - bbox[1])), interpolation=cv2.INTER_LINEAR)
+            # mask[mask > 0.5] = 1
+            # mask[mask <= 0.5] = 0
+            # mask_color = random.randint(80, 100)
+            # c = random.randint(0, 2)
+            # target = im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] + mask_color * mask
+            # target[target >= 255] = 255
+            # im[bbox[1]: bbox[3], bbox[0]: bbox[2], c] = target
+    # cv2.imwrite(filename, im)
+
+
 def draw_detection(im_array, boxes_this_image, scale, filename):
     """
     visualize all detections in one image
@@ -404,3 +536,12 @@ def draw_detection(im_array, boxes_this_image, scale, filename):
                         color=color_white, fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=0.5)
     print(filename)
     cv2.imwrite(filename, im)
+
+
+def decode_keypoint(kp_label, bbox):
+    x = int(kp_label) % 56
+    y = int(kp_label) / 56
+
+    x = bbox[0] + float(x) / 56.0 * (bbox[2] - bbox[0])
+    y = bbox[1] + float(y) / 56.0 * (bbox[3] - bbox[1])
+    return x, y
