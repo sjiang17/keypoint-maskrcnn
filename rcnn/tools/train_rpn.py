@@ -162,7 +162,7 @@ def train_rpn(network, dataset, image_set, root_path, dataset_path,
     lr = base_lr * (lr_factor ** (len(lr_epoch) - len(lr_epoch_diff)))
     lr_iters = [int(epoch * len(roidb) / batch_size) for epoch in lr_epoch_diff]
     print('lr', lr, 'lr_epoch_diff', lr_epoch_diff, 'lr_iters', lr_iters)
-    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=500)
+    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=1)
     # optimizer
     optimizer_params = {'momentum': 0.9,
                         'wd': 0.0001,

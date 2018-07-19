@@ -1,12 +1,9 @@
+from __future__ import print_function
 import argparse
-
 import mxnet as mx
-import sys
-sys.path.append('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
-import rcnn
+import os
 from rcnn.config import config, default, generate_config
-from rcnn.tools.demo_maskrcnn_keypoint import demo_maskrcnn_keypoint
-
+from rcnn.tools.test_maskrcnn_keypoint import test_maskrcnn_keypoint
 
 
 def parse_args():
@@ -15,8 +12,8 @@ def parse_args():
     parser.add_argument('--network', help='network name', default=default.network, type=str)
     parser.add_argument('--dataset', help='dataset name', default=default.dataset, type=str)
     args, rest = parser.parse_known_args()
-    # generate_config(args.network, args.dataset)
-    rcnn.config.generate_config('resnet_fpn', 'coco')
+    #generate_config(args.network, args.dataset)
+    generate_config('resnet_fpn', 'coco')
 
     parser.add_argument('--image_set', help='image_set name', default=default.test_image_set, type=str)
     parser.add_argument('--root_path', help='output data folder', default=default.root_path, type=str)
@@ -40,20 +37,18 @@ def main():
     args = parse_args()
     args.network = 'resnet_fpn'
     args.dataset = 'coco'
-    args.image_set = 'val2017'
-    args.prefix = 'model/res50-fpn/coco/l2_minitrain/final'
-    args.result_path = 'results/keypoint/l2_heatmap_minitrain_val'
+    args.image_set = 'personsample2017'
+    args.prefix = 'model/res50-fpn/coco/personsample/final'
+    args.result_path = 'result/keypoint_json/personsample'
     args.has_rpn = True
     args.epoch = 0
     args.gpus = '0'
-
     ctx = [mx.gpu(int(gpu)) for gpu in args.gpu.split(',')]
     print(args)
-    demo_maskrcnn_keypoint(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path, args.result_path,
+    test_maskrcnn_keypoint(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path, args.result_path,
                   ctx, args.prefix, args.epoch, args.vis, args.shuffle, args.has_rpn, args.proposal, args.thresh)
 
 
 if __name__ == '__main__':
-    import os
     os.chdir('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
     main()

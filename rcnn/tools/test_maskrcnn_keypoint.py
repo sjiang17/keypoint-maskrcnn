@@ -1,44 +1,39 @@
 from __future__ import print_function
-
 import argparse
 import pprint
 import mxnet as mx
 
 from ..config import config, default, generate_config
+from ..config import config as cfg
 from ..symbol import *
 from ..dataset import *
 from ..core.loader import TestLoader, SequentialLoader
-from ..core.tester import Predictor, pred_eval_mask, pred_demo_keypoint, pred_demo_keypoint_heatmap
+from ..core.tester import Predictor, pred_eval_keypoint
 from ..utils.load_model import load_param
-import pdb
 import os
 
-def demo_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path, result_path,
+def test_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path, result_path,
                   ctx, prefix, epoch, vis, shuffle, has_rpn, proposal, thresh):
-    # set config
-    if has_rpn:
-        config.TEST.HAS_RPN = True
 
-    # print config
-    pprint.pprint(config)
     if not os.path.exists(result_path):
         os.makedirs(result_path)
 
-    # load symbol and testing data
+    # set config
     if has_rpn:
-        if config.MASKFCN.ON:
-            sym = \
-                eval('get_' + network + '_maskfcn_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
-        elif not config.KEYPOINT.USE_HEATMAP:
-            print('get_' + network + '_mask_test')
-            sym = eval('get_' + network + '_mask_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
-        else:
-            print('get_' + network + '_mask_keypoint_test')
-            sym = eval('get_' + network + '_mask_keypoint_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
-        imdb = eval(dataset)(image_set, root_path, dataset_path)
-        roidb = imdb.gt_roidb()
+        config.TEST.HAS_RPN = True
     else:
         raise NotImplementedError
+
+    # unconditionally turn off maskfcn
+    cfg.MASKFCN.ON = False
+
+    # print config
+    pprint.pprint(config)
+
+    # load symbol and testing data
+    sym = eval('get_' + network + '_mask_test')(num_classes=config.NUM_CLASSES, num_anchors=config.NUM_ANCHORS)
+    imdb = eval(dataset)(image_set, root_path, dataset_path, load_memory=False)
+    roidb = imdb.gt_roidb()
 
     # (possibly) group the roidb by aspect
     horizontal_inds, vertical_inds = [], []
@@ -66,7 +61,7 @@ def demo_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path,
         test_data = TestLoader(roidb, batch_size=len(ctx), shuffle=shuffle, has_rpn=True)
 
     # load model
-    arg_params, aux_params = load_param(prefix, epoch, convert=False, ctx=ctx, process=True)
+    arg_params, aux_params = load_param(prefix, epoch, convert=True, ctx=None, process=True)
 
     # infer shape
     data_shape_dict = dict(test_data.provide_data)
@@ -75,7 +70,7 @@ def demo_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path,
     aux_shape_dict = dict(zip(sym.list_auxiliary_states(), aux_shape))
 
     # check parameters
-    for k in sorted(sym.list_arguments()):
+    for k in sym.list_arguments():
         if k in data_shape_dict or 'label' in k:
             continue
         assert k in arg_params, k + ' not initialized'
@@ -91,7 +86,7 @@ def demo_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path,
     # decide maximum shape
     data_names = [k[0] for k in test_data.provide_data]
     label_names = None
-    max_data_shape = [('data', (1, 3, max([v[0] for v in config.SCALES]), max([v[1] for v in config.SCALES])))]
+    max_data_shape = [('data', (len(ctx), 3, max([v[0] for v in config.SCALES]), max([v[1] for v in config.SCALES])))]
     if not has_rpn:
         max_data_shape.append(('rois', (1, config.TEST.PROPOSAL_POST_NMS_TOP_N + 30, 5)))
 
@@ -101,7 +96,5 @@ def demo_maskrcnn_keypoint(network, dataset, image_set, root_path, dataset_path,
                           provide_data=test_data.provide_data, provide_label=test_data.provide_label,
                           arg_params=arg_params, aux_params=aux_params)
 
-    if config.KEYPOINT.USE_HEATMAP:
-        pred_demo_keypoint_heatmap(predictor, test_data, imdb, roidb, result_path, vis=vis, thresh=thresh)
-    else:
-        pred_demo_keypoint(predictor, test_data, imdb, roidb, result_path, vis=vis, thresh=thresh)
+    # start detection
+    pred_eval_keypoint(predictor, test_data, imdb, roidb, result_path, vis=vis, thresh=thresh)

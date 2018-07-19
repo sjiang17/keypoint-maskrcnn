@@ -47,6 +47,10 @@ class MutableModule(BaseModule):
                     if prefix in name:
                         fixed_param_names.append(name)
         self._fixed_param_names = fixed_param_names
+        # import pprint
+        # print("fixed")
+        # pprint.pprint(sorted(fixed_param_names))
+        # print(len(fixed_param_names))
 
     def _reset_bind(self):
         self.binded = False

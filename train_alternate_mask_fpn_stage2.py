@@ -23,7 +23,7 @@ def alternate_train(args, ctx, pretrained, epoch,
 
     # model path
     model_path = args.prefix
-    args.resume = False
+    args.resume = True
     logging.info('########## TRAIN RCNN WITH IMAGENET INIT AND RPN DETECTION')
     train_maskrcnn(args.network, args.dataset, args.image_set, args.root_path, args.dataset_path,
                    args.frequent, args.kvstore, args.work_load_list, args.no_flip, args.no_shuffle, args.resume,
@@ -31,14 +31,16 @@ def alternate_train(args, ctx, pretrained, epoch,
                    train_shared=False, lr=rcnn_lr, lr_step=rcnn_lr_step, proposal='rpn', maskrcnn_stage='rcnn1')
 
 
-def parse_args():
+def parse_args(debug):
     parser = argparse.ArgumentParser(description='Train Faster R-CNN Network')
     # general
     parser.add_argument('--network', help='network name', default=default.network, type=str)
     parser.add_argument('--dataset', help='dataset name', default=default.dataset, type=str)
     args, rest = parser.parse_known_args()
-    generate_config(args.network, args.dataset)
-    # rcnn.config.generate_config('resnet_fpn', 'coco')
+    if not debug:
+        generate_config(args.network, args.dataset)
+    else:
+        rcnn.config.generate_config('resnet_fpn', 'coco')
     parser.add_argument('--image_set', help='image_set name', default=default.image_set, type=str)
     parser.add_argument('--root_path', help='output data folder', default=default.root_path, type=str)
     parser.add_argument('--dataset_path', help='dataset path', default=default.dataset_path, type=str)
@@ -66,15 +68,19 @@ def parse_args():
 
 
 def main():
-    args = parse_args()
-    # args.network = 'resnet_fpn'
-    # args.dataset = 'coco'
-    # args.image_set = 'minitrain2017'
-    # args.root_path =  'model/res50-fpn/coco/debug/'
-    # args.pretrained = 'model/resnet-50'
-    # args.prefix = 'model/res50-fpn/coco/debug/'
-    # args.pretrained_epoch = 0
-    # args.gpus = '0'
+    DEBUG = True
+    args = parse_args(DEBUG)
+    if DEBUG:
+        import os
+        os.chdir('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
+        args.network = 'resnet_fpn'
+        args.dataset = 'coco'
+        args.image_set = 'minitrain2017'
+        args.root_path =  'model/res50-fpn/coco/l2_minitrain/'
+        args.pretrained = 'model/resnet-50'
+        args.prefix = 'model/res50-fpn/coco/minitrain/'
+        args.pretrained_epoch = 0
+        args.gpus = '0'
     print 'Called with argument:', args
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')]
     alternate_train(args, ctx, args.pretrained, args.pretrained_epoch,
@@ -83,6 +89,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # import os
-    # os.chdir('/mnt/truenas/scratch/siyu/keypoint_maskrcnn')
     main()

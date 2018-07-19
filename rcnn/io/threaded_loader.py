@@ -189,7 +189,7 @@ class ThreadedAspectMaskROIIter(mx.io.DataIter):
         self.data_name = ['data']
         for s in config.RCNN_FEAT_STRIDE:
             self.data_name.append('rois_stride%s' % s)
-        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'keypoint_target']
+        self.label_name = ['label', 'bbox_target', 'bbox_weight', 'keypoint_target', 'keypoint_weight']#, 'keypoint_valid']
 
         # status variable for synchronization between get_data and get_label
         self.horizontal_cur = 0

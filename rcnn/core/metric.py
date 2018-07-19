@@ -24,7 +24,7 @@ def get_rcnn_fpn_names():
 def get_maskrcnn_fpn_name():
     rcnn_pred, rcnn_label = get_rcnn_fpn_names()
     pred = rcnn_pred + ['keypoint_prob']
-    label = rcnn_label + ['keypoint_target']
+    label = rcnn_label + ['keypoint_target', 'keypoint_weight']
     return pred, label
 
 
@@ -206,6 +206,24 @@ class RPNRegLossMetric(mx.metric.EvalMetric):
 
         self.sum_metric += np.sum(bbox_loss)
         self.num_inst += num_inst
+
+
+class KeypointL2Metric(mx.metric.EvalMetric):
+    def __init__(self):
+        name = 'KeypointL2Loss'
+        super(KeypointL2Metric, self).__init__(name)
+        self.pred, self.label = get_maskrcnn_fpn_name()
+
+    def update(self, labels, preds):
+        kp_loss = preds[self.pred.index('keypoint_prob')].asnumpy()
+        kp_weight = labels[self.label.index('keypoint_weight')].asnumpy()
+        # kp_target = labels[self.label.index('keypoint_target')].asnumpy()
+
+        # num_inst = np.sum(kp_weight > 0) / (config.KEYPOINT.MAPSIZE * config.KEYPOINT.MAPSIZE)
+        num_inst = kp_weight.shape[0]
+        # print(num_inst)
+        self.num_inst += num_inst
+        self.sum_metric += np.sum(kp_loss)
 
 
 class RCNNRegLossMetric(mx.metric.EvalMetric):

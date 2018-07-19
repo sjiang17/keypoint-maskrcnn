@@ -51,7 +51,13 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     logger = logging.getLogger()
 
     # load symbol
-    sym = eval('get_' + network + '_maskrcnn')(num_classes=config.NUM_CLASSES) # get_resnet_fpn_maskrcnn
+    if config.KEYPOINT.USE_HEATMAP:
+        if config.KEYPOINT.USE_L2:
+            sym = get_resnet_fpn_maskrcnn_keypoint_heatmap_L2(num_classes=config.NUM_CLASSES)
+        else:
+            sym = get_resnet_fpn_maskrcnn_keypoint_heatmap(num_classes=config.NUM_CLASSES)
+    else:
+        sym = eval('get_' + network + '_maskrcnn')(num_classes=config.NUM_CLASSES) # get_resnet_fpn_maskrcnn
 
     # setup multi-gpu
     batch_size = len(ctx)
@@ -114,15 +120,23 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     max_label_shape.append(('label', (input_batch_size, config.TRAIN.BATCH_ROIS)))
     max_label_shape.append(('bbox_target', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
     max_label_shape.append(('bbox_weight', (input_batch_size, config.TRAIN.BATCH_ROIS, config.NUM_CLASSES * 4)))
-    # max_label_shape.append(('mask_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), config.NUM_CLASSES, 28, 28)))
-    # max_label_shape.append(('mask_target', (input_batch_size,config.TRAIN.BATCH_ROIS, config.NUM_CLASSES, 28, 28)))
-    max_label_shape.append(('keypoint_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, 1)))
+    if config.KEYPOINT.USE_HEATMAP:
+        max_label_shape.append(('keypoint_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, config.KEYPOINT.MAPSIZE, config.KEYPOINT.MAPSIZE)))
+        if config.KEYPOINT.USE_L2:
+            max_label_shape.append(('keypoint_weight', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, config.KEYPOINT.MAPSIZE, config.KEYPOINT.MAPSIZE)))
+    else:
+        max_label_shape.append(('keypoint_target', (input_batch_size, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, 1)))
 
     # infer shape
     data_shape_dict = dict(train_data.provide_data + train_data.provide_label)
     print('input shape:')
     pprint.pprint(data_shape_dict)
-    data_shape_dict['keypoint_target'] = (1, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17)
+    if config.KEYPOINT.USE_HEATMAP:
+        data_shape_dict['keypoint_target'] = (1, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, config.KEYPOINT.MAPSIZE, config.KEYPOINT.MAPSIZE)
+        if config.KEYPOINT.USE_L2:
+            data_shape_dict['keypoint_weight'] = (1, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, config.KEYPOINT.MAPSIZE, config.KEYPOINT.MAPSIZE)
+    else:
+        data_shape_dict['keypoint_target'] = (1, int(config.TRAIN.BATCH_ROIS * config.TRAIN.FG_FRACTION), 17, 1)
     arg_shape, out_shape, aux_shape = sym.infer_shape(**data_shape_dict)
     arg_shape_dict = dict(zip(sym.list_arguments(), arg_shape))
     out_shape_dict = zip(sym.list_outputs(), out_shape)
@@ -195,6 +209,9 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
                 elif k.endswith('weight'):
                     print('init %s with msra' % k)
                     msra(k, arg_params[k])
+                elif k.startswith('kp_bn'):
+                    print('init %s with normal(0.01):' % k)
+                    normal001(k, arg_params[k])
                 else:
                     raise KeyError("unknown parameter tpye %s" % k)
         for k in sym.list_auxiliary_states():
@@ -231,7 +248,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     # fix block 0,1 and rcnn
     # fixed_param_prefix += ['rcnn']
 
-    # fix_all but keypoint head
+    # # fix_all but keypoint head
     # fixed_param_prefix = ['rcnn', 'conv0', 'stage1', 'stage2', 'stage3', 'stage4',
     #                       'P5', 'P4', 'P3', 'P2', 'gamma', 'beta']
     mod = MutableModule(sym, data_names=data_names, label_names=label_names,
@@ -244,19 +261,20 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     eval_metric = metric.RCNNAccMetric()
     cls_metric = metric.RCNNLogLossMetric()
     bbox_metric = metric.RCNNRegLossMetric()
-    # mask_acc_metric = metric.MaskAccMetric()
-    # mask_log_metric = metric.MaskLogLossMetric()
-    # mask_log_loss = mx.metric.Loss(output_names=["mask_output_output"])
     eval_metrics = mx.metric.CompositeEvalMetric()
     kp_log_loss = metric.KeypointLossMetric()
+    kp_dummy_log_loss = mx.metric.Loss(output_names=["kp_output_output"])
+    kp_l2_loss = metric.KeypointL2Metric()
 
-    simple_metric = True
-    if simple_metric:
-        for child_metric in [eval_metric, cls_metric, bbox_metric, kp_log_loss]:
-            eval_metrics.add(child_metric)
-    # else:
-    #     for child_metric in [eval_metric, cls_metric, bbox_metric, mask_acc_metric, mask_log_metric]:
-    #         eval_metrics.add(child_metric)
+    for child_metric in [eval_metric, cls_metric, bbox_metric]:
+        eval_metrics.add(child_metric)
+    if config.KEYPOINT.USE_HEATMAP:
+        if config.KEYPOINT.USE_L2:
+             eval_metrics.add(kp_l2_loss)
+        else:
+             eval_metrics.add(kp_dummy_log_loss)
+    else:
+        eval_metrics.add(kp_log_loss)
 
     # callback
     batch_end_callback = callback.Speedometer(train_data.batch_size, frequent=frequent)
@@ -265,11 +283,12 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     base_lr = lr / 8 * len(ctx)
     lr_factor = 0.1
     lr_epoch = [int(epoch) for epoch in lr_step.split(',')]
+    print(lr_epoch)
     lr_epoch_diff = [epoch - begin_epoch for epoch in lr_epoch if epoch > begin_epoch]
     lr = base_lr * (lr_factor ** (len(lr_epoch) - len(lr_epoch_diff)))
     lr_iters = [int(epoch * len(roidb) / batch_size) for epoch in lr_epoch_diff]
     print('lr', lr, 'lr_epoch_diff', lr_epoch_diff, 'lr_iters', lr_iters)
-    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=500)
+    lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, warmup=True, warmup_type="gradual", warmup_step=1)
     # optimizer
     optimizer_params = {'momentum': 0.9,
                         'wd': 0.0001,
@@ -317,7 +336,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     #
     #     if not isinstance(eval_metric, bMetric.EvalMetric):
     #         eval_metric = bMetric.create(eval_metric)
-    #
+
     #     ################################################################################
     #     # training loop
     #     ################################################################################
@@ -332,7 +351,7 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     #         while not end_of_batch:
     #             data_batch = next_data_batch
     #             print('----------DEBUG---------')
-    #             debug_save_dir = 'debug/save3/'
+    #             debug_save_dir = 'debug/onesample/'
     #             cPickle.dump(data_batch.data, open(os.path.join(debug_save_dir, 'data{}.pkl'.format(cnt)), 'w'))
     #             cPickle.dump(data_batch.label, open(os.path.join(debug_save_dir, 'label{}.pkl'.format(cnt)), 'w'))
     #
@@ -344,9 +363,9 @@ def train_maskrcnn(network, dataset, image_set, root_path, dataset_path,
     #             # print((data_batch.data[2].shape))
     #             # print((data_batch.data[3].shape))
     #             # print((data_batch.data[4].shape))
-    #             cnt += 1
-    #             if cnt == 50:
-    #                 exit()
+    #             # cnt += 1
+    #             # if cnt == 50:
+    #             exit()
     #
     #             mod.forward_backward(data_batch)
     #             mod.update()

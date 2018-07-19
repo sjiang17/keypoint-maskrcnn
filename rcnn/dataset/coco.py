@@ -9,7 +9,7 @@ from six.moves import range, zip, cPickle
 from multiprocessing.dummy import Pool
 from imdb import IMDB
 from ..core.segms import flip_segms
-from ..core.keypoint_utils import flip_keypoints
+from ..core.keypoint_utils import flip_keypoints, decode_keypoint
 from ..processing.bbox_transform import bbox_overlaps
 
 # coco api
@@ -290,6 +290,18 @@ class coco(IMDB):
         if 'test' not in self.image_set:
             self._do_python_eval(res_file, res_folder)
 
+    def evaluate_keypoints(self, results_pack):
+        all_boxes = results_pack['all_boxes']
+        all_kps = results_pack['all_kps']
+        all_iminfos = [result['im_info'] for result in results_pack['results_list']]
+        res_folder = os.path.join(self.cache_path, 'results')
+        if not os.path.exists(res_folder):
+            os.makedirs(res_folder)
+        res_file = os.path.join(res_folder, 'maskrcnn_%s_results.json' % self.image_set)
+        self._write_coco_keypoint_results(all_boxes, all_kps, all_iminfos, res_file)
+        if 'test' not in self.image_set:
+            self._do_python_eval_keypoint(res_file, res_folder)
+
     def evaluate_detections(self, results_pack):
         """
         leave as empty, as is done in evaluate_mask
@@ -316,6 +328,18 @@ class coco(IMDB):
         with open(res_file, 'w') as f:
             json.dump(results, f, sort_keys=True, indent=4)
 
+    def _write_coco_keypoint_results(self, detections, keypoints, im_infos, res_file):
+        results = []
+        for cls_ind, cls in enumerate(self.classes):
+            if cls == '__background__':
+                continue
+            print ('collecting %s results (%d/%d)' % (cls, cls_ind, self.num_classes - 1))
+            coco_cat_id = self._class_to_coco_ind[cls]
+            results.extend(self._coco_keypoint_results_one_category(detections[cls_ind], keypoints[cls_ind], im_infos, coco_cat_id))
+            print('writing results json to %s' % res_file)
+            with open(res_file, 'w') as f:
+                json.dump(results, f, sort_keys=True, indent=4)
+
     def _coco_results_one_category(self, boxes, all_masks, im_infos, cat_id):
         results = []
         for im_ind, index in enumerate(self.image_set_index):
@@ -331,6 +355,25 @@ class coco(IMDB):
             result = [{'image_id': index,
                        'category_id': cat_id,
                        'segmentation': self._encode_mask([x1[k], y1[k], x2[k], y2[k]], masks[k], index),
+                       'score': scores[k]} for k in range(dets.shape[0])]
+            results.extend(result)
+        return results
+
+    def _coco_keypoint_results_one_category(self, boxes, all_keypoints, im_infos, cat_id):
+        results = []
+        for im_ind, index in enumerate(self.image_set_index):
+            dets = boxes[im_ind].astype(np.float)
+            keypoints = all_keypoints[im_ind]
+            if len(dets) == 0:
+                continue
+            scores = dets[:, -1]
+            x1 = dets[:, 0]
+            y1 = dets[:, 1]
+            x2 = dets[:, 2]
+            y2 = dets[:, 3]
+            result = [{'image_id': index,
+                       'category_id': cat_id,
+                       'keypoints': self._encode_keypoint([x1[k], y1[k], x2[k], y2[k]], keypoints[k], index),
                        'score': scores[k]} for k in range(dets.shape[0])]
             results.extend(result)
         return results
@@ -353,6 +396,28 @@ class coco(IMDB):
         coco_eval.accumulate()
         self._print_detection_metrics(coco_eval)
         eval_file = os.path.join(res_folder, '%s_%s_results.pkl' % ("seg", self.image_set))
+        with open(eval_file, 'wb') as f:
+            cPickle.dump(coco_eval, f, cPickle.HIGHEST_PROTOCOL)
+        print ('eval results saved to %s' % eval_file)
+
+    def _do_python_eval_keypoint(self, res_file, res_folder):
+        coco_dt = self.coco.loadRes(res_file)
+        coco_eval = COCOeval(self.coco, coco_dt)
+        coco_eval.params.useSegm = False
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        self._print_detection_metrics(coco_eval)
+        eval_file = os.path.join(res_folder, '%s_%s_results.pkl' % ("bbox", self.image_set))
+        with open(eval_file, 'wb') as f:
+            cPickle.dump(coco_eval, f, cPickle.HIGHEST_PROTOCOL)
+        print ('eval results saved to %s' % eval_file)
+
+        coco_eval = COCOeval(self.coco, coco_dt, 'keypoints')
+        print (coco_eval.params.iouType)
+        coco_eval.evaluate()
+        coco_eval.accumulate()
+        coco_eval.summarize()
+        eval_file = os.path.join(res_folder, '%s_%s_results.pkl' % ("keypoint", self.image_set))
         with open(eval_file, 'wb') as f:
             cPickle.dump(coco_eval, f, cPickle.HIGHEST_PROTOCOL)
         print ('eval results saved to %s' % eval_file)
@@ -405,3 +470,15 @@ class coco(IMDB):
             mask_img[bbox[1]: bbox[3], bbox[0]: bbox[2]] = mask
 
         return coco_mask_encode(mask_img)
+
+    def _encode_keypoint(self, bbox, keypoints, im_id):
+        im_ann = self.coco.loadImgs(im_id)[0]
+        width = im_ann['width']
+        height = im_ann['height']
+
+        bbox = map(int, bbox)
+        assert len(keypoints) == 17
+        transfromed_keypoints = np.ones(17*3, dtype=np.int32)
+        for k, kp in enumerate(keypoints):
+            transfromed_keypoints[k*3], transfromed_keypoints[k*3+1] = decode_keypoint(kp, bbox)
+        return transfromed_keypoints.tolist()

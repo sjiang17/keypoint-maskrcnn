@@ -14,6 +14,8 @@ config.FIXED_PARAMS = ['conv0', 'stage1', 'gamma', 'beta']
 config.FIXED_PARAMS_SHARED = ['conv0', 'stage1', 'stage2', 'stage3', 'stage4',
                               'P5', 'P4', 'P3', 'P2', 'gamma', 'beta']
 
+# config.FIXED_PARAMS = ['conv0', 'stage1', 'bn0_gamma', 'bn0_beta', 'bn_data_gamma', 'bn_data_beta']
+
 # dataset related params
 config.DATASET = "coco"
 config.NUM_CLASSES = 9
@@ -133,7 +135,7 @@ default = edict()
 default.network = 'resnet_fpn'
 default.pretrained = 'model/resnet-50'
 default.pretrained_epoch = 0
-default.base_lr = 0.02
+default.base_lr = 0.01
 # default dataset
 default.dataset = 'Cityscape'
 default.image_set = 'train'
@@ -213,10 +215,16 @@ dataset.coco.SCALE = False
 dataset.coco.rpn_epoch = 6
 dataset.coco.rpn_lr_step = '3,5'
 dataset.coco.rcnn_epoch = 12
-dataset.coco.rcnn_lr_step = '6,8'
+dataset.coco.rcnn_lr_step = '6,10'
+# dataset.coco.rpn_epoch = 200
+# dataset.coco.rpn_lr_step = '100'
+# dataset.coco.rcnn_epoch = 1000
+# dataset.coco.rcnn_lr_step = '500'
 
 config.KEYPOINT = edict()
-config.KEYPOINT.MAPSIZE = 56
+config.KEYPOINT.MAPSIZE = 28
+config.KEYPOINT.USE_HEATMAP = True
+config.KEYPOINT.USE_L2 = True
 # config.KEYPOINT.fg_num = 64
 
 
